@@ -1,7 +1,7 @@
-import { HudScreen } from '@/features/hud/HudScreen';
+import { HudReferenceScreen } from '@/features/reference-pages/ReferenceScreens';
 
 // 교육장: /training/hud?product=hydraulic-pump&card=0
 export default async function HudPage({ searchParams }: { searchParams: Promise<{ product?: string; card?: string }> }) {
-  const { product = 'hydraulic-pump', card = '0' } = await searchParams;
-  return <HudScreen productId={product} cardIndex={Number(card)} />;
+  const { card = '0' } = await searchParams;
+  return <HudReferenceScreen cardIndex={Number(card)} />;
 }

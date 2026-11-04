@@ -1,5 +1,5 @@
-import { DesignGuideScreen } from '@/features/design-guide/DesignGuideScreen';
+import { GuideReferenceScreen } from '@/features/reference-pages/ReferenceScreens';
 
 export default function DesignGuidePage() {
-  return <DesignGuideScreen />;
+  return <GuideReferenceScreen />;
 }

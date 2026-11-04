@@ -12,7 +12,7 @@ export interface FlowState {
 export type FlowAction =
   | { type: 'hoverProduct'; productIndex: number | null } | { type: 'selectProduct'; productIndex: number } | { type: 'focusDone' }
   | { type: 'hoverSection'; sectionIndex: number | null } | { type: 'selectSection'; sectionIndex: number } | { type: 'clearSection' }
-  | { type: 'startTraining' } | { type: 'enterHud' } | { type: 'exitHud' } | { type: 'backToSelect' } | { type: 'toggleWireframe' };
+  | { type: 'startTraining' } | { type: 'enterHud' } | { type: 'cancelPreparation' } | { type: 'exitHud' } | { type: 'backToSelect' } | { type: 'toggleWireframe' };
 
 export const initialFlowState: FlowState = { phase: 'select', hoveredIndex: null, activeIndex: null, hoveredSectionIndex: null, selectedSectionIndex: null, isWireframe: false };
 
@@ -27,6 +27,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
     case 'clearSection': return { ...state, selectedSectionIndex: null };
     case 'startTraining': return state.selectedSectionIndex !== null ? { ...state, phase: 'transition', isWireframe: false } : state;
     case 'enterHud': return state.phase === 'transition' ? { ...state, phase: 'hud' } : state;
+    case 'cancelPreparation': return state.phase === 'transition' || state.phase === 'hud' ? { ...state, phase: 'explode', hoveredSectionIndex: null } : state;
     case 'exitHud': return { ...state, phase: 'explode', selectedSectionIndex: null, hoveredSectionIndex: null };
     case 'backToSelect': return { ...initialFlowState };
     case 'toggleWireframe': return state.phase === 'explode' ? { ...state, isWireframe: !state.isWireframe } : state;

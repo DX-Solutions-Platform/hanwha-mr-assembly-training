@@ -1,0 +1,25 @@
+// 원본 리포트의 미체결 기본값, 정확도 경계와 등급 판정 회귀 검사.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Module = require('node:module');
+const ts = require('typescript');
+const filename = path.join(__dirname, '../src/features/training-practice/assemblyReport.ts');
+const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+const reportModule = new Module(filename, module); reportModule._compile(compiled, filename);
+const { createAssemblyReport } = reportModule.exports;
+const report = (mistakes, torque, mode = 'practice') => createAssemblyReport({ mistakes, hints: 3, torque }, 59.6, mode, '검증 시각');
+const empty = report(0, []);
+assert.equal(empty.time, '1분 00초'); assert.equal(empty.torque, '100%'); assert.equal(empty.grade, '우수');
+assert.equal(empty.bolts, '12.0 · 12.0 · 12.0 · 12.0'); assert.equal(empty.hints, 3);
+assert.equal(empty.mode, '연습 모드'); assert.equal(empty.at, '검증 시각');
+assert.equal(report(0, [12, 12, 12, 12]).grade, '우수');
+assert.equal(report(0, [12, 14.2, 12, 12]).torque, '75%');
+assert.equal(report(0, [12, 14.2, 12, 12]).grade, '양호');
+assert.equal(report(2, [12], 'eval').grade, '양호'); assert.equal(report(2, [12], 'eval').mode, '평가 모드');
+assert.equal(report(3, [12]).grade, '재교육 권장');
+assert.equal(report(4, [14.2, 12, 12, 12]).bolts, '14.2 · 12.0 · 12.0 · 12.0');
+assert.equal(report(0, [11.401, 12.599]).torque, '100%');
+assert.equal(report(0, [11.399, 12.601]).torque, '0%');
+assert.equal(createAssemblyReport({ mistakes: 0, hints: 0, torque: [12] }, 125.2, 'practice', '').time, '2분 05초');
+console.log('Report defaults, accuracy boundaries and grade checks passed.');

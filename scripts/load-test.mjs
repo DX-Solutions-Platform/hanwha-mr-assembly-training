@@ -16,6 +16,8 @@ const SCENARIO_LIST = [
   { name: '교육장(단독)', route: '/training/hud?product=hydraulic-pump&card=2' },
   { name: '여객기·스마트폰', route: '/training/complex', waitMs: 2500 },
   { name: '도면 업데이트', route: '/training/upload' },
+  { name: '세부 조립 카드', route: '/training/cards' },
+  { name: '스텝 스툴 교육', route: '/training/stool?card=0' },
 ];
 const VIEWPORT_LIST = [
   { name: 'HD', width: 1280, height: 720 }, { name: 'FHD', width: 1920, height: 1080 },
@@ -34,6 +36,14 @@ for (const scenario of SCENARIO_LIST) for (const viewport of VIEWPORT_LIST) for 
   await page.goto(BASE_URL + scenario.route, { waitUntil: 'networkidle0' });
   const loadMs = Date.now() - startTime;
   if (scenario.waitMs) await new Promise((resolve) => setTimeout(resolve, scenario.waitMs));
+  if (scenario.name === '교육장(한 화면)') {
+    // 준비/안전/BOM 화면을 교육장 성능으로 잘못 기록하지 않습니다.
+    await page.waitForSelector('[data-preparation-phase="safety"]', { timeout: 30000 });
+    await page.evaluate(() => [...document.querySelectorAll('button')].find((button) => button.textContent === '모두 확인했습니다')?.click());
+    await page.waitForSelector('[data-preparation-phase="bom"]', { timeout: 10000 });
+    await page.keyboard.press('Space');
+    await page.waitForSelector('[data-preparation-phase="main"]', { timeout: 15000 });
+  }
   const metric = await page.evaluate((sampleMs) => new Promise((resolve) => {
     const frameTimeList = []; let longTaskCount = 0; let lastTime = performance.now(); const begin = lastTime;
     try { new PerformanceObserver((list) => { longTaskCount += list.getEntries().length; }).observe({ type: 'longtask', buffered: false }); } catch { /* 미지원 */ }

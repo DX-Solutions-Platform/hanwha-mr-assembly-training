@@ -12,7 +12,7 @@ export const viewport: Viewport = { width: 'device-width', initialScale: 1, them
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko" className={jetBrainsMono.variable}>
-      {/* Browser extensions may add body attributes before React hydrates. */}
+      {/* 브라우저 확장이 body에 삽입하는 속성 차이만 허용합니다. 하위 요소는 계속 검증합니다. */}
       <body suppressHydrationWarning>
         <StyledComponentsRegistry>
           <Providers>{children}</Providers>

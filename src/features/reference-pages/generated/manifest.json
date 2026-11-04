@@ -1,0 +1,38 @@
+[
+  {
+    "reference": "Drawing Upload.dc.html",
+    "sha256": "e4cefa84ca10c19a13f46d98cbb30ebceb9c601727a2db4a1c0c29696881764d",
+    "component": "DrawingUploadReference",
+    "bytes": 39847
+  },
+  {
+    "reference": "Training Menu.dc.html",
+    "sha256": "a99661a0137b8aa89ff99d09035043e313e63ebf7032fb5d1748cdfa7de5df5d",
+    "component": "TrainingMenuReference",
+    "bytes": 56948
+  },
+  {
+    "reference": "Stool Training.dc.html",
+    "sha256": "3aa50a708757f8b52a0247d8b2b529ea2cb5b842730855bbeb44c6518d8c241f",
+    "component": "StoolTrainingReference",
+    "bytes": 103482
+  },
+  {
+    "reference": "Complex Explode.dc.html",
+    "sha256": "0fbdd32dd2e9caed3317e6d91ef50a151d169bb9d243a963cf8ff8b9a2adfdf9",
+    "component": "ComplexExplodeReference",
+    "bytes": 54184
+  },
+  {
+    "reference": "HUD Prototype.dc.html",
+    "sha256": "e9e8eef56b1b7b463683a757a90a442cc0d453bd02d62d5ad8b59b4021a56059",
+    "component": "HudPrototypeReference",
+    "bytes": 156880
+  },
+  {
+    "reference": "Design Guide.dc.html",
+    "sha256": "c233f17f3b0a4d654e565dff0b11083d1c83a4111fcab53be3d34853977dcc77",
+    "component": "DesignGuideReference",
+    "bytes": 45414
+  }
+]

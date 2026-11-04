@@ -1,2 +1,2 @@
-import { DrawingUploadScreen } from '@/features/drawing-upload/DrawingUploadScreen';
-export default function DrawingUploadPage() { return <DrawingUploadScreen />; }
+import { DrawingReferenceScreen } from '@/features/reference-pages/ReferenceScreens';
+export default function DrawingUploadPage() { return <DrawingReferenceScreen />; }

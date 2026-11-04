@@ -12,7 +12,7 @@ export function useTestScenario(dispatch: Dispatch<FlowAction>) {
     if (!scenario) return;
     const timerList = [setTimeout(() => dispatch({ type: 'selectProduct', productIndex: 0 }), 600)];
     if (scenario === 'hud') {
-      timerList.push(setTimeout(() => dispatch({ type: 'selectSection', sectionIndex: 2 }), 2200));
+      timerList.push(setTimeout(() => dispatch({ type: 'selectSection', sectionIndex: 0 }), 2200));
       timerList.push(setTimeout(() => dispatch({ type: 'startTraining' }), 2600));
     }
     return () => timerList.forEach(clearTimeout);
