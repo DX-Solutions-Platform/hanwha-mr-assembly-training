@@ -1,12 +1,13 @@
 import {
   BufferAttribute, BufferGeometry, DoubleSide, EdgesGeometry, Group, LineBasicMaterial,
-  LineSegments, Mesh, MeshBasicMaterial, OrthographicCamera, Scene, Vector3, WebGLRenderer,
+  LineSegments, Mesh, MeshBasicMaterial, OrthographicCamera, Scene, Vector3, WebGLRenderer, type Object3D,
 } from 'three';
 import type { StepBounds, StepModel } from '@/features/drawing-upload-dev/model/stepTypes';
 
 const WIDTH = 448;
 const HEIGHT = 300;
 const LINE_COLOR = '#57636b';
+const LOCATION_COLOR = '#c45517';
 
 export interface DrawingTarget {
   bounds: StepBounds;
@@ -43,9 +44,14 @@ export function createPartDrawingRenderer(resolution = 1) {
   const output = document.createElement('canvas');
   output.width = width;
   output.height = height;
+  const overlay = document.createElement('canvas');
+  overlay.width = width;
+  overlay.height = height;
   const canvasContext = output.getContext('2d');
-  if (!canvasContext) throw new Error('도면 이미지 캔버스를 만들 수 없습니다.');
+  const overlayContext = overlay.getContext('2d');
+  if (!canvasContext || !overlayContext) throw new Error('도면 이미지 캔버스를 만들 수 없습니다.');
   const context = canvasContext;
+  const locationContext = overlayContext;
   const renderer = new WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(width, height, false);
   renderer.setClearColor(0xffffff, 0);
@@ -63,11 +69,24 @@ export function createPartDrawingRenderer(resolution = 1) {
   const highlightedSurface = surface.clone();
   highlightedSurface.color.set('#ffdec5');
   const highlightedOutline = outline.clone();
-  highlightedOutline.color.set('#a94c19');
+  highlightedOutline.color.set(LOCATION_COLOR);
+
+  function paintFigure(targetContext: CanvasRenderingContext2D, lineColor: string) {
+    targetContext.clearRect(0, 0, width, height);
+    for (const [x, y] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
+      targetContext.drawImage(renderer.domElement, x * resolution, y * resolution);
+    }
+    targetContext.globalCompositeOperation = 'source-in';
+    targetContext.fillStyle = lineColor;
+    targetContext.fillRect(0, 0, width, height);
+    targetContext.globalCompositeOperation = 'source-over';
+    targetContext.drawImage(renderer.domElement, 0, 0);
+  }
 
   function draw(model: StepModel, target: DrawingTarget) {
     const selected = target.shapeIds ? new Set(target.shapeIds) : null;
     const highlighted = new Set(target.highlightShapeIds);
+    const locationMeshes = new Set<Object3D>();
     const group = new Group();
     const geometries: BufferGeometry[] = [];
     const center = target.bounds.max.map((value, axis) => (value + target.bounds.min[axis]) / 2);
@@ -83,6 +102,7 @@ export function createPartDrawingRenderer(resolution = 1) {
         geometry.setAttribute('position', new BufferAttribute(body.position, 3));
         geometry.setIndex(new BufferAttribute(body.index, 1));
         const mesh = new Mesh(geometry, isHighlighted ? highlightedSurface : surface);
+        if (isHighlighted) locationMeshes.add(mesh);
         mesh.position.set((body.origin[0] - center[0]) * scale, (body.origin[1] - center[1]) * scale, (body.origin[2] - center[2]) * scale);
         mesh.scale.setScalar(scale);
         const edges = new EdgesGeometry(geometry, 21);
@@ -96,16 +116,16 @@ export function createPartDrawingRenderer(resolution = 1) {
       fitCamera(camera, target.bounds, scale);
       renderer.render(scene, camera);
 
-      // Draw the outside silhouette from visible pixels, including smooth curved surfaces.
-      context.clearRect(0, 0, width, height);
-      for (const [x, y] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
-        context.drawImage(renderer.domElement, x * resolution, y * resolution);
+      paintFigure(context, LINE_COLOR);
+      if (locationMeshes.size) {
+        // Project the selected part again from the same camera and assembly coordinates.
+        for (const mesh of group.children) mesh.visible = locationMeshes.has(mesh);
+        renderer.render(scene, camera);
+        paintFigure(locationContext, LOCATION_COLOR);
+        context.globalAlpha = 0.76;
+        context.drawImage(overlay, 0, 0);
+        context.globalAlpha = 1;
       }
-      context.globalCompositeOperation = 'source-in';
-      context.fillStyle = LINE_COLOR;
-      context.fillRect(0, 0, width, height);
-      context.globalCompositeOperation = 'source-over';
-      context.drawImage(renderer.domElement, 0, 0);
       context.globalCompositeOperation = 'destination-over';
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, width, height);

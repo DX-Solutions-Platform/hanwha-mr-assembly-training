@@ -6,7 +6,9 @@ const { createHash } = require('node:crypto');
 const { loadModule, analyze, tableTokens, makePdfFixture } = require('./verify-drawing-upload-dev.cjs');
 const { createStepModel, sameStepModel } = loadModule('model/stepModel');
 const { getStepAssemblyParts } = loadModule('model/stepAssemblyParts');
-const { moveInstruction, paginateInstructions } = loadModule('../drawing-upload/instructions/assemblyInstructions');
+const { isPracticeReady, getPracticeFocus } = loadModule('../drawing-upload/practice/stepPracticeConfig');
+const { advancePracticeTurn, getPracticeResistance, getPreparationOffset, PREPARATION_CENTER } = loadModule('../drawing-upload/practice/stepPracticeMotion');
+const { createInstructionDrafts, getInstructionDrawingTargets, moveInstruction, nextUnconfirmedInstruction, paginateInstructions } = loadModule('../drawing-upload/instructions/assemblyInstructions');
 const { bindStepShape, unbindStepShape } = loadModule('model/modelBindings');
 const { buildStepGeometry, findShapeAtFace } = loadModule('model/buildStepGeometry');
 const { groupParts, createPartReview, revisePart } = loadModule('review/reviewModel');
@@ -45,16 +47,75 @@ async function checkModel() {
   assert.deepEqual(Array.from(grouped[0].shapeIds), ['shape-0', 'shape-2'], 'A multi-body part is selected as a unit');
   assert.deepEqual(Array.from(grouped[1].shapeIds), ['shape-1'], 'Equal names do not merge separate occurrences');
   assert.equal(grouped.flatMap((part) => part.shapeIds).length, assembly.manifest.shapeList.length, 'Unlisted bodies are still selectable');
-  const instructions = Array.from({ length: 18 }, (_, index) => ({
-    id: String(index), section: index < 17 ? '조립' : '검사', partNumber: 1, description: '확인',
+  const [basePart, mountingPart] = grouped;
+  const practicePick = { point: [0.5, 0, 0], normal: [0, 0, 1] };
+  const practiceConfig = {
+    placement: { partNumber: basePart.number, pick: practicePick },
+    fastening: { partNumber: mountingPart.number, pick: practicePick },
+    tool: 'Torx 비트', torque: '1.0', exampleTorque: true,
+  };
+  assert.equal(isPracticeReady(practiceConfig, grouped.length), true);
+  assert.equal(isPracticeReady({ ...practiceConfig, fastening: practiceConfig.placement }, grouped.length), false);
+  assert.equal(isPracticeReady({ ...practiceConfig, torque: '작업지시서 확인' }, grouped.length), false);
+  assert.equal(isPracticeReady({ ...practiceConfig, fastening: { partNumber: mountingPart.number } }, grouped.length), false);
+  const focus = getPracticeFocus({ min: [-10, -10, -10], max: [10, 10, 10] }, mountingPart.bounds, practicePick.point, 0.1);
+  assert.equal((focus.min[0] + focus.max[0]) / 2, 5, 'The enlarged view centers on the point set in the authoring viewport');
+  const modelBounds = { min: [-10, -10, -10], max: [10, 10, 10] };
+  const [stagingX] = getPreparationOffset(modelBounds, modelBounds, 0.1);
+  assert.equal(stagingX, PREPARATION_CENTER);
+  assert.ok(stagingX - 1 > 1, 'Even the widest part starts clear of the assembly area');
+  const looseTurn = advancePracticeTurn(0.35, Math.PI / 12);
+  const loadedTurn = advancePracticeTurn(0.96, Math.PI / 12);
+  assert.ok(loadedTurn.rotation < looseTurn.rotation / 3, 'The same input moves the tool less as the fastener seats');
+  assert.ok(getPracticeResistance(0.96) > getPracticeResistance(0.35));
+  assert.equal(advancePracticeTurn(0.96, -0.5).progress, 0.96);
+  const { before, after } = getInstructionDrawingTargets(mountingPart, basePart);
+  assert.equal(before.shapeIds, basePart.shapeIds);
+  assert.deepEqual(Array.from(after.shapeIds), [...basePart.shapeIds, ...mountingPart.shapeIds]);
+  assert.equal(after.highlightShapeIds, mountingPart.shapeIds);
+  assert.equal(before.bounds, after.bounds, 'Both views use the same framing');
+  for (let axis = 0; axis < 3; axis++) {
+    assert.equal(after.bounds.min[axis], Math.min(basePart.bounds.min[axis], mountingPart.bounds.min[axis]));
+    assert.equal(after.bounds.max[axis], Math.max(basePart.bounds.max[axis], mountingPart.bounds.max[axis]));
+  }
+  assert.equal(createInstructionDrafts([mountingPart])[0].basePartNumber, undefined);
+  const drafts = createInstructionDrafts([
+    { ...grouped[0], name: 'Torx bolt' }, { ...grouped[1], name: 'Torx bolt' }, { ...grouped[2], name: 'Wire' },
+  ]);
+  assert.equal(drafts.length, 3);
+  assert.notEqual(drafts[0].id, drafts[1].id, 'Repeated parts must be confirmed individually');
+  assert.match(drafts[0].tool, /Torx/);
+  assert.equal(drafts[0].torque, '작업지시서 확인 (N·m)');
+  assert.match(drafts[0].description, /Torx 비트로 체결하세요/);
+  assert.match(drafts[2].description, /경로로 배치하고.*연결하세요/);
+  const mountingDrafts = createInstructionDrafts([
+    { ...grouped[0], name: 'Washer' }, { ...grouped[1], name: 'PCB' }, { ...grouped[2], name: 'SP-RHM-003' },
+  ]);
+  assert.match(mountingDrafts[0].description, /와셔.*끼우세요/);
+  assert.match(mountingDrafts[1].description, /기판.*고정하세요/);
+  assert.match(mountingDrafts[2].description, /위치와 방향에 맞춰.*장착하세요/);
+  assert.equal(mountingDrafts[0].torque, '해당 없음 (와셔 배치)');
+  assert.equal(mountingDrafts[1].torque, '기판 체결부 규격 확인');
+  assert.equal(mountingDrafts[2].torque, '체결 여부 확인');
+  assert.ok(drafts.every((step) => step.section && step.description && step.tool && step.torque && !step.isConfirmed && step.basePartNumber === undefined));
+  const [namedTorx] = createInstructionDrafts([{ ...mountingPart, name: 'Low profile torx, M2x5 v2' }]);
+  assert.match(namedTorx.tool, /Torx/);
+  assert.equal(namedTorx.torque, '작업지시서 확인 (N·m)', 'Thread dimensions alone do not specify installation torque');
+  assert.equal(nextUnconfirmedInstruction(drafts, drafts[1].id).id, drafts[2].id);
+  drafts[2].isConfirmed = true;
+  assert.equal(nextUnconfirmedInstruction(drafts, drafts[1].id).id, drafts[0].id, 'Review wraps to earlier unconfirmed parts');
+  drafts[0].isConfirmed = true;
+  assert.equal(nextUnconfirmedInstruction(drafts, drafts[1].id), undefined, 'Review completes after the last outstanding part');
+  const instructions = Array.from({ length: 8 }, (_, index) => ({
+    id: String(index), section: index < 7 ? '조립' : '검사', partNumber: 1, description: '확인',
   }));
   const reordered = moveInstruction(instructions, '1', -1);
   assert.equal(reordered[0].id, '1');
-  assert.equal(moveInstruction(reordered, '17', -1), reordered, 'A step cannot be reordered into a different section');
+  assert.equal(moveInstruction(reordered, '7', -1), reordered, 'A step cannot be reordered into a different section');
   const sheets = paginateInstructions(reordered);
   assert.equal(sheets.length, 2);
-  assert.equal(sheets[0][0].steps.length, 16);
-  assert.equal(sheets[1][0].offset, 16, 'Step numbering continues on the next sheet');
+  assert.equal(sheets[0][0].steps.length, 6);
+  assert.equal(sheets[1][0].offset, 6, 'Step numbering continues on the next sheet');
   assert.equal(sheets[1][1].number, 2);
   const millimeter = await parse(path.join(fixtures, 'cube-units/cube-mm.step'));
   const inch = await parse(path.join(fixtures, 'cube-units/cube-in.step'));
@@ -144,19 +205,26 @@ async function checkBrowser() {
     await page.mouse.click(standaloneBox.x + standaloneBox.width / 2, standaloneBox.y + standaloneBox.height / 2);
     await page.waitForSelector(part + '[aria-pressed=true]');
     await click('작업 단계 등록');
-    await page.waitForSelector('dialog[open] textarea');
-    await page.type('dialog[open] textarea', 'Check the mounting position.');
-    await click('단계 추가');
-    await page.type('dialog[open] textarea', 'Place the part at the marked location.');
-    await click('단계 추가');
-    await click('1-2 단계 위로');
+    const draftDescription = await page.$eval('dialog[open] textarea', (input) => input.value);
+    assert.match(draftDescription, /위치와 방향에 맞춰.*장착하세요/);
+    assert.equal(await page.$eval('dialog[open] button', (button) => button.disabled), true);
+    const confirm = 'dialog[open] input[name="part-confirmed"]';
+    assert.equal(await page.$eval(confirm, (input) => input.disabled), false, 'Registration can be confirmed without a comparison part');
+    await page.click(confirm);
+    await page.waitForSelector('[aria-label="조립 상세 3D"] canvas');
     await click('시트 미리보기');
     const sheet = '[aria-label="조립 순서 시트 1"]';
     await page.waitForFunction((selector) => {
       const drawings = document.querySelectorAll(selector + ' img');
-      return drawings.length === 2 && [...drawings].every((image) => image.complete && image.naturalWidth > 0);
+      return drawings.length === 1 && drawings[0].complete && drawings[0].naturalWidth > 0;
     }, { timeout: 20000 }, sheet);
-    assert.match(await page.$eval(sheet, (node) => node.textContent), /1-1.*Place the part.*1-2.*Check the mounting position/);
+    assert.ok(await page.$eval(sheet, (node, description) => node.textContent.includes(description), draftDescription));
+    assert.match(await page.$eval(sheet, (node) => node.textContent), /조립 위치.*주황색 장착 부품/);
+    await click('조립 상세로');
+    await click('단계 편집');
+    assert.equal(await page.$eval(confirm, (input) => input.checked), true);
+    await page.type('dialog[open] textarea', ' 확인');
+    assert.equal(await page.$eval(confirm, (input) => input.checked), false, 'Editing a confirmed part requires reconfirmation');
     await click('닫기');
     await upload(Buffer.from('invalid STEP'), 'invalid.step', '가져올 STEP 선택');
     await page.waitForSelector('[data-step-status=error]');

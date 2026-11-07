@@ -3,16 +3,21 @@ import { useMemo } from 'react';
 import styled from 'styled-components';
 import type { StepAssemblyPart } from '@/features/drawing-upload-dev/model/stepAssemblyParts';
 import type { StepModel } from '@/features/drawing-upload-dev/model/stepTypes';
-import { paginateInstructions, SHEET_COLUMNS, type AssemblyInstruction } from './assemblyInstructions';
+import { getInstructionDrawingTargets, paginateInstructions, SHEET_COLUMNS, type AssemblyInstruction } from './assemblyInstructions';
 import { useStepDrawings } from './useStepDrawings';
 
 export function InstructionSheetPreview({ model, parts, instructions }: {
   model: StepModel; parts: StepAssemblyPart[]; instructions: AssemblyInstruction[];
 }) {
   const partByNumber = useMemo(() => new Map(parts.map((part) => [part.number, part])), [parts]);
-  const requests = useMemo(() => [...new Set(instructions.map((step) => step.partNumber))].map((number) => ({
-    key: String(number), target: partByNumber.get(number) ?? null,
-  })), [instructions, partByNumber]);
+  const requests = useMemo(() => instructions.flatMap((step) => {
+    const part = partByNumber.get(step.partNumber);
+    const base = partByNumber.get(step.basePartNumber ?? 0);
+    if (!part) return [];
+    if (base) return getInstructionFigureRequests(step.id, part, base);
+    const location = { key: `${step.id}-location`, target: { bounds: model.bounds, highlightShapeIds: part.shapeIds } };
+    return parts.length === 1 ? [location] : [location, { key: `${step.id}-part`, target: part }];
+  }), [instructions, partByNumber, model.bounds, parts.length]);
   const images = useStepDrawings(model, requests);
   const pages = paginateInstructions(instructions);
 
@@ -32,14 +37,27 @@ export function InstructionSheetPreview({ model, parts, instructions }: {
                 <CardGrid>
                   {section.steps.map((step, stepIndex) => {
                     const part = partByNumber.get(step.partNumber);
+                    const base = partByNumber.get(step.basePartNumber ?? 0);
                     return (
                       <StepCard key={step.id} $highlighted={step.isHighlighted}>
-                        <Figure>
+                        <StepHeading>
                           <StepNumber>{section.number}-{section.offset + stepIndex + 1}</StepNumber>
-                          <DrawingImage image={images[step.partNumber]} alt={`${part?.name ?? '부품'} 등각 선화`} />
-                        </Figure>
+                          <strong>{part ? `#${part.number} ${part.name}` : '부품 정보 없음'}</strong>
+                        </StepHeading>
+                        {part && (base ? <InstructionAssemblyFigures stepId={step.id} part={part} base={base} images={images} /> : (
+                          <Comparison $single={parts.length === 1}>
+                            <ComparisonFigure>
+                              <figcaption>조립 위치 <MountLegend>· 주황색 장착 부품</MountLegend></figcaption>
+                              <DrawingImage image={images[`${step.id}-location`]} alt={`${part.name} 조립 위치`} />
+                            </ComparisonFigure>
+                            {parts.length > 1 && <ComparisonFigure>
+                              <figcaption>부품 상세</figcaption>
+                              <DrawingImage image={images[`${step.id}-part`]} alt={`${part.name} 부품 상세`} />
+                            </ComparisonFigure>}
+                          </Comparison>
+                        ))}
                         <CardText>
-                          <strong>{part?.name ?? '부품 정보 없음'}</strong>
+                          {base && <b>비교 부품 · #{base.number} {base.name}</b>}
                           <p>{step.description}</p>
                           {(step.tool || step.torque) && <CardDetails>
                             {step.tool && <span>공구 {step.tool}</span>}
@@ -64,6 +82,28 @@ export function InstructionSheetPreview({ model, parts, instructions }: {
   );
 }
 
+export function getInstructionFigureRequests(stepId: string, part: StepAssemblyPart, base: StepAssemblyPart) {
+  const { before, after } = getInstructionDrawingTargets(part, base);
+  return [{ key: `${stepId}-before`, target: before }, { key: `${stepId}-after`, target: after }];
+}
+
+export function InstructionAssemblyFigures({ stepId, part, base, images }: {
+  stepId: string; part: StepAssemblyPart; base: StepAssemblyPart; images: Record<string, string | null>;
+}) {
+  return (
+    <Comparison>
+      <ComparisonFigure>
+        <figcaption>장착 전</figcaption>
+        <DrawingImage image={images[`${stepId}-before`]} alt={`${base.name} 장착 전`} />
+      </ComparisonFigure>
+      <ComparisonFigure>
+        <figcaption>장착 후 <MountLegend>· 주황색 장착 부품</MountLegend></figcaption>
+        <DrawingImage image={images[`${stepId}-after`]} alt={`${part.name} 장착 후`} />
+      </ComparisonFigure>
+    </Comparison>
+  );
+}
+
 export function AssemblyDrawingPreview({ model, selected }: { model: StepModel; selected: StepAssemblyPart | null }) {
   const requests = useMemo(() => {
     const assembly = { key: 'assembly', target: { bounds: model.bounds, highlightShapeIds: selected?.shapeIds } };
@@ -81,7 +121,10 @@ export function AssemblyDrawingPreview({ model, selected }: { model: StepModel; 
         </PaperHeader>
         <DrawingGrid $hasDetail={!!selected}>
           <LargeFigure>
-            <figcaption>전체 조립도 · 등각 투상</figcaption>
+            <figcaption>
+              전체 조립도 · 등각 투상
+              {selected && <LocationLegend>주황색 · 선택 부품 위치 (가려진 부분 포함)</LocationLegend>}
+            </figcaption>
             <DrawingImage image={images.assembly} alt="전체 조립품 등각 선화" resolution={2} />
           </LargeFigure>
           {selected && <LargeFigure>
@@ -99,7 +142,7 @@ export function AssemblyDrawingPreview({ model, selected }: { model: StepModel; 
   );
 }
 
-function DrawingImage({ image, alt, resolution = 1 }: { image?: string | null; alt: string; resolution?: number }) {
+export function DrawingImage({ image, alt, resolution = 1 }: { image?: string | null; alt: string; resolution?: number }) {
   return image
     ? <Image src={image} alt={alt} width={448 * resolution} height={300 * resolution} unoptimized />
     : <FigureStatus role="status">{image === null ? '그림을 만들지 못했습니다' : '선화 준비 중'}</FigureStatus>;
@@ -135,19 +178,27 @@ const CardGrid = styled.div(({ theme }) => ({
   display: 'grid', gridTemplateColumns: `repeat(${SHEET_COLUMNS}, minmax(0,1fr))`, gap: theme.space[2],
 }));
 const StepCard = styled.article<{ $highlighted: boolean }>(({ theme, $highlighted }) => ({
-  minWidth: 0, minHeight: 142, display: 'grid', gridTemplateColumns: 'minmax(0, .85fr) minmax(0, 1fr)',
-  alignItems: 'start', gap: theme.space[2], padding: theme.space[2],
+  minWidth: 0, display: 'grid', alignContent: 'start', gap: theme.space[2], padding: theme.space[3],
   border: '1px solid ' + ($highlighted ? theme.color.primary : paper.rule),
   background: $highlighted ? paper.highlight : paper.background,
 }));
-const Figure = styled.div({
-  display: 'grid', alignContent: 'start',
-  '& img': { display: 'block', width: '100%', height: 'auto', marginTop: 4 },
-});
+const StepHeading = styled.header(({ theme }) => ({
+  display: 'flex', alignItems: 'baseline', gap: theme.space[2], overflowWrap: 'anywhere',
+}));
 const StepNumber = styled.strong(({ theme }) => ({ fontFamily: theme.font.mono, fontSize: theme.size.lg }));
 const FigureStatus = styled.span(({ theme }) => ({
   display: 'grid', placeItems: 'center', minHeight: 66, textAlign: 'center', color: paper.subdued, fontSize: theme.size.xs,
 }));
+const Comparison = styled.div<{ $single?: boolean }>(({ theme, $single }) => ({
+  display: 'grid', gridTemplateColumns: $single ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0,1fr))', gap: theme.space[2],
+}));
+const ComparisonFigure = styled.figure(({ theme }) => ({
+  margin: 0, minWidth: 0, display: 'grid', gridTemplateRows: 'auto 1fr', alignItems: 'center',
+  border: '1px solid ' + paper.rule, background: paper.background, color: paper.ink,
+  '& figcaption': { padding: theme.space[2], borderBottom: '1px solid ' + paper.rule, fontSize: theme.size.sm },
+  '& img': { display: 'block', width: '100%', height: 'auto' },
+}));
+const MountLegend = styled.span({ color: '#a94c19' });
 const DrawingGrid = styled.div<{ $hasDetail: boolean }>(({ theme, $hasDetail }) => ({
   display: 'grid', gridTemplateColumns: $hasDetail ? 'minmax(0,1.35fr) minmax(0,1fr)' : 'minmax(0,1fr)',
   gap: theme.space[4],
@@ -158,6 +209,9 @@ const LargeFigure = styled.figure(({ theme }) => ({
   '& figcaption': { padding: theme.space[3], borderBottom: '1px solid ' + paper.rule, fontSize: theme.size.md, overflowWrap: 'anywhere' },
   '& img': { display: 'block', width: '100%', maxWidth: 790, height: 'auto', margin: '0 auto' },
   '& [role="status"]': { minHeight: 190 },
+}));
+const LocationLegend = styled.span(({ theme }) => ({
+  marginLeft: theme.space[3], color: '#a94c19', fontSize: theme.size.sm,
 }));
 const CardText = styled.div(({ theme }) => ({
   fontSize: theme.size.sm, lineHeight: 1.45, wordBreak: 'keep-all', overflowWrap: 'anywhere',

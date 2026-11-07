@@ -13,7 +13,8 @@ import { useStepModel } from '@/features/drawing-upload-dev/model/useStepModel';
 import { ReviewHeader, ReviewInput, ReviewPanel, ReviewTitle } from '@/features/drawing-upload-dev/review/reviewStyles';
 import { ActionButton, Muted, ScrollArea } from '@/features/drawing-upload-dev/ui/sharedStyles';
 import { AssemblyInstructionsDialog, type InstructionMode } from './instructions/AssemblyInstructionsDialog';
-import type { AssemblyInstruction } from './instructions/assemblyInstructions';
+import { createInstructionDrafts } from './instructions/assemblyInstructions';
+import { isPracticeReady, readPracticeDraft } from './practice/stepPracticeConfig';
 
 export function StepUploadScreen() {
   const step = useStepModel();
@@ -77,8 +78,12 @@ function AssemblyWorkspace({ model, step, openFile }: {
   const parts = useMemo(() => getStepAssemblyParts(model), [model]);
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(100);
-  const [instructions, setInstructions] = useState<AssemblyInstruction[]>([]);
+  const [instructions, setInstructions] = useState(() => createInstructionDrafts(parts));
   const [instructionMode, setInstructionMode] = useState<InstructionMode | null>(null);
+  const [practiceDraft, setPracticeDraft] = useState(() => readPracticeDraft(model.manifest.sha256, parts.length));
+  const hasPracticeDraft = isPracticeReady(practiceDraft, parts.length);
+  const confirmedCount = instructions.filter((instruction) => instruction.isConfirmed).length;
+  const isDetailReady = instructions.length > 0 && confirmedCount === instructions.length;
   const selectedRow = useRef<HTMLButtonElement>(null);
   const selectedId = step.selectedId;
   const selected = selectedId ? parts.find((part) => part.shapeIds.includes(selectedId)) ?? null : null;
@@ -121,18 +126,19 @@ function AssemblyWorkspace({ model, step, openFile }: {
       <StepViewer step={step} assembly={{ selected, selectShape, openFile }} />
     </AssemblyGrid>
     <InstructionBar aria-label="교육용 도면 작업">
-      <div><strong>교육용 도면 · 작업 단계 {instructions.length}개</strong><Muted>조립도를 열거나, 작업 단계를 등록해 조립 순서 시트를 만드세요.</Muted></div>
+      <div><strong>부품 확인 {confirmedCount} / {instructions.length}개</strong><Muted>교육용 도면은 바로 볼 수 있으며, 전체 부품을 확인하면 조립 상세가 열립니다.</Muted></div>
       <InstructionActions>
         <ActionButton $primary onClick={() => setInstructionMode('drawing')}>교육용 도면 보기</ActionButton>
-        <ActionButton disabled={!selected && !instructions.length} onClick={() => setInstructionMode('edit')}>
-          {selected ? '작업 단계 등록' : '작업 단계 편집'}
-        </ActionButton>
-        <ActionButton disabled={!instructions.length} onClick={() => setInstructionMode('preview')}>조립 순서 시트 미리보기</ActionButton>
+        <ActionButton disabled={!instructions.length} onClick={() => setInstructionMode('edit')}>작업 단계 등록</ActionButton>
+        <ActionButton disabled={!isDetailReady} onClick={() => setInstructionMode('detail')}>조립 상세</ActionButton>
+        {hasPracticeDraft && <ActionButton onClick={() => setInstructionMode('practice')}>조립 실습</ActionButton>}
       </InstructionActions>
     </InstructionBar>
     {instructionMode && <AssemblyInstructionsDialog
       mode={instructionMode} onMode={setInstructionMode} onClose={() => setInstructionMode(null)}
       model={model} parts={parts} selected={selected} instructions={instructions} onChange={setInstructions}
+      onSelectPart={(part) => selectShape(part.shapeIds[0])}
+      practiceDraft={practiceDraft} onPracticeChange={setPracticeDraft}
     />}
     </>
   );
