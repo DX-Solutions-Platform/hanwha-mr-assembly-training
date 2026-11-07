@@ -5,5 +5,6 @@ import nextTs from 'eslint-config-next/typescript';
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores(['.next/**', 'out/**', 'node_modules/**', 'scripts/**', 'docs/**']),
+  // Vendor files are distributed builds; app lint rules apply to our source.
+  globalIgnores(['.next/**', 'out/**', 'node_modules/**', 'scripts/**', 'docs/**', 'public/vendor/**']),
 ]);

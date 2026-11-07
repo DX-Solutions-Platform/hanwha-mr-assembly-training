@@ -14,8 +14,17 @@ export function loadReferenceThree(): Promise<ReferenceThree> {
     if (referenceWindow.THREE?.REVISION === '149') { resolve(referenceWindow.THREE); return; }
     const script = document.createElement('script');
     script.src = '/vendor/three-r149.min.js';
-    script.onload = () => referenceWindow.THREE ? resolve(referenceWindow.THREE) : reject(new Error('three r149 did not initialize'));
-    script.onerror = () => { referencePromise = null; script.remove(); reject(new Error('Could not load reference three r149')); };
+    script.async = true;
+    const fail = (message: string) => {
+      window.clearTimeout(timeout); script.onload = null; script.onerror = null;
+      referencePromise = null; script.remove(); reject(new Error(message));
+    };
+    const timeout = window.setTimeout(() => fail('Reference three r149 loading timed out'), 10_000);
+    script.onload = () => {
+      if (referenceWindow.THREE?.REVISION !== '149') { fail('three r149 did not initialize'); return; }
+      window.clearTimeout(timeout); script.onload = null; script.onerror = null; resolve(referenceWindow.THREE);
+    };
+    script.onerror = () => fail('Could not load reference three r149');
     document.head.appendChild(script);
   });
   return referencePromise;

@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
+import Image from 'next/image';
 import styled, { keyframes } from 'styled-components';
 import { SectionTitle } from '@/components/common/SectionTitle';
 import { ThinProgress } from '@/components/common/ThinProgress';
@@ -17,17 +18,18 @@ export function AnalyzePanel({ fileList, onDone }: { fileList: File[]; onDone: (
   const [progressPercent, setProgressPercent] = useState(0);
   const [pageImageList, setPageImageList] = useState<string[]>([]);
   const [partCodeList, setPartCodeList] = useState<string[]>([]);
-  const doneRef = useRef(onDone); doneRef.current = onDone;
+  const handleDone = useEffectEvent(onDone);
 
   useEffect(() => {
+    let isCurrent = true, progress = 0;
+    let finishTimer: ReturnType<typeof setTimeout> | undefined;
     const pdfFile = fileList.find((file) => /\.pdf$/i.test(file.name));
-    if (pdfFile) readPdfPages(pdfFile, (pageImageUrl, codeList) => { setPageImageList((list) => [...list, pageImageUrl]); setPartCodeList(codeList); }).catch(console.warn);
-    const intervalId = setInterval(() => setProgressPercent((value) => {
-      const nextValue = value + 0.6;
-      if (nextValue >= 100) { clearInterval(intervalId); setTimeout(() => doneRef.current(), 600); return 100; }
-      return nextValue;
-    }), 40);
-    return () => clearInterval(intervalId);
+    if (pdfFile) readPdfPages(pdfFile, (pageImageUrl, codeList) => { if (isCurrent) { setPageImageList((list) => [...list, pageImageUrl]); setPartCodeList(codeList); } }).catch(console.warn);
+    const intervalId = setInterval(() => {
+      progress = Math.min(100, progress + 0.6); setProgressPercent(progress);
+      if (progress >= 100) { clearInterval(intervalId); finishTimer = setTimeout(handleDone, 600); }
+    }, 40);
+    return () => { isCurrent = false; clearInterval(intervalId); clearTimeout(finishTimer); };
   }, [fileList]);
 
   const currentPageIndex = Math.min(7, Math.floor((progressPercent / 100) * 9));
@@ -37,7 +39,7 @@ export function AnalyzePanel({ fileList, onDone }: { fileList: File[]; onDone: (
       <PageGrid>
         {Array.from({ length: 8 }, (_, pageIndex) => (
           <Page key={pageIndex} $isCurrent={pageIndex === currentPageIndex && progressPercent < 100} $isLoaded={!!pageImageList[pageIndex]}>
-            {pageImageList[pageIndex] && <img src={pageImageList[pageIndex]} alt="" />}
+            {pageImageList[pageIndex] && <Image src={pageImageList[pageIndex]} alt="" fill sizes="16vw" unoptimized />}
             {pageIndex === currentPageIndex && progressPercent < 100 && <ScanLine />}
             <PageTag>P{pageIndex + 1}</PageTag>
           </Page>

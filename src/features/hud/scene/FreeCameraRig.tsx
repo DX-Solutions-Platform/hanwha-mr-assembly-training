@@ -38,7 +38,7 @@ export function FreeCameraRig() {
     };
   }, [camera, gl]);
 
-  useFrame((_, deltaTime) => {
+  useFrame(({ camera }, deltaTime) => {
     const keyState = keyStateRef.current, { yaw, pitch } = angleRef.current;
     camera.rotation.set(pitch, yaw, 0, 'YXZ');
     const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)), right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));

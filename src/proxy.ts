@@ -8,8 +8,9 @@ export function proxy(request: NextRequest) {
   const isBlocked = isBlockedDevice(request.headers.get('user-agent') ?? '');
   const isGuidePage = request.nextUrl.pathname.startsWith(GUIDE_PATH);
   if (isBlocked && !isGuidePage) return NextResponse.rewrite(new URL(GUIDE_PATH, request.url));
-  if (!isBlocked && isGuidePage) return NextResponse.redirect(new URL('/training', request.url));
+  if (!isBlocked && isGuidePage) return NextResponse.redirect(new URL('/', request.url));
   return NextResponse.next();
 }
 
-export const config = { matcher: ['/((?!_next|models|fonts|favicon.ico|.*\\..*).*)'] };
+// Asset handlers authenticate uploads and enforce their own size limits.
+export const config = { matcher: ['/((?!_next|models|fonts|favicon.ico|api/part-library/asset/|.*\\..*).*)'] };

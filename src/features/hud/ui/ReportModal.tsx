@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
+import { useState } from 'react';
 import styled from 'styled-components';
 import { CutButton } from '@/components/common/CutButton';
 
 /** 최종 리포트 (전체 구간 완료 후 1회) */
 export function ReportModal({ startedAt, mistakeCount, overTorqueCount, hintCount }: { startedAt: number; mistakeCount: number; overTorqueCount: number; hintCount: number }) {
-  const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+  const [elapsedSeconds] = useState(() => Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
   const metricList = [
     ['소요 시간', `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`],
     ['실수', String(mistakeCount)], ['과체결', String(overTorqueCount)], ['힌트 사용', String(hintCount)],

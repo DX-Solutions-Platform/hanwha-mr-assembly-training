@@ -2,33 +2,52 @@
   "name": "hanwha-mr-assembly-training",
   "version": "1.0.0",
   "private": true,
-  "engines": { "node": ">=20.9.0" },
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
+    "postinstall": "node scripts/sync-step-runtime.cjs && node scripts/sync-ocr-runtime.cjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:load": "node scripts/load-test.mjs"
+    "test:load": "node scripts/load-test.mjs",
+    "test:startup": "node scripts/verify-startup.cjs",
+    "test:upload-dev": "node scripts/verify-drawing-upload-dev.cjs",
+    "test:part-review": "node scripts/verify-part-review.cjs",
+    "test:step-upload": "node scripts/verify-step-upload.cjs",
+    "test:pdf-model": "node scripts/verify-pdf-model-example.cjs",
+    "test:real-upload": "node scripts/verify-real-upload.cjs",
+    "test:assembly": "node scripts/verify-assembly-editor.cjs",
+    "test:upload-usability": "node scripts/verify-upload-usability.cjs",
+    "test:bulk-review": "node scripts/verify-bulk-review.cjs",
+    "test:intro-layout": "node scripts/verify-intro-layout.cjs",
+    "test:lint-regressions": "node scripts/verify-lint-regressions.cjs",
+    "test:ocr": "node scripts/verify-ocr-upload.cjs"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.6",
+    "@react-three/fiber": "^9.3.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/kor": "1.0.0",
     "next": "16.4.3",
+    "occt-import-js": "0.0.23",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "styled-components": "^6.1.19",
-    "three": "^0.180.0",
-    "@react-three/fiber": "^9.3.0",
-    "@react-three/drei": "^10.7.6",
-    "pdfjs-dist": "^4.10.38"
+    "tesseract.js": "7.0.0",
+    "three": "^0.180.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
     "@types/node": "^22",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.180.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
-    "puppeteer": "^24"
+    "puppeteer": "^24",
+    "typescript": "^5.9.0"
   }
 }

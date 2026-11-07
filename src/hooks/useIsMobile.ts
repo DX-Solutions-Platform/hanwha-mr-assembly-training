@@ -1,10 +1,13 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { isBlockedDevice } from '@/lib/deviceGate';
 
-/** 휴대폰·태블릿 차단, Quest 브라우저는 허용. null = 판별 전 */
-export function useIsMobile(): boolean | null {
-  const [isMobile, setIsMobile] = useState<boolean | null>(null);
-  useEffect(() => { setIsMobile(isBlockedDevice(navigator.userAgent, navigator.maxTouchPoints)); }, []);
-  return isMobile;
+const subscribeToDevice = () => () => {};
+const readClientDevice = () => isBlockedDevice(navigator.userAgent, navigator.maxTouchPoints);
+// 서버의 모바일 차단은 proxy가 처리합니다. 초기 HTML은 빈 화면 대신 해당 페이지를 표시합니다.
+const readServerDevice = () => false;
+
+/** 휴대폰·태블릿 차단, Quest 브라우저는 허용. 서버와 hydration의 첫 화면을 일치시킵니다. */
+export function useIsMobile(): boolean {
+  return useSyncExternalStore(subscribeToDevice, readClientDevice, readServerDevice);
 }

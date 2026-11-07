@@ -28,7 +28,9 @@ export function TwoLevelExplodeDriver({ builtModel, modelSpec, complexState, dis
   const targetRef = useRef(1);
   const flyStartRef = useRef<number | null>(null);
   const isAssembledRef = useRef(false);
+  const bridgeRef = useRef(bridge);
   const { selectedSectionIndex, phase } = complexState;
+  useEffect(() => { bridgeRef.current = bridge; }, [bridge]);
 
   useEffect(() => { targetRef.current = 1; kickSpring(levelOneSpring, 1); }, [levelOneSpring]);
   useEffect(() => {
@@ -46,6 +48,7 @@ export function TwoLevelExplodeDriver({ builtModel, modelSpec, complexState, dis
   useEffect(() => { if (selectedSectionIndex !== null) kickSpring(levelTwoSpringList[selectedSectionIndex], 1); }, [selectedSectionIndex, levelTwoSpringList]);
 
   useFrame(({ clock }, deltaTime) => {
+    const bridge = bridgeRef.current;
     stepSpring(levelOneSpring, targetRef.current, deltaTime);
     const levelOne = levelOneSpring.value;
     const isAssembled = levelOne < ASSEMBLED_THRESHOLD;

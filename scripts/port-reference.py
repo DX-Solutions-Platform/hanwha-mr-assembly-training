@@ -62,6 +62,8 @@ def render(node, aliases=(), key=None):
         if not node.strip(): return ''
         return ''.join('{'+expr(bit[2:-2],aliases)+'}' if bit.startswith('{{') else '{'+dump(bit)+'}' for bit in re.split(r'({{.*?}})',node) if bit)
     tag,a,children=node
+    # 기본 예제 도면은 배포하지 않습니다. 원본을 재변환해도 버튼을 되살리지 않습니다.
+    if re.fullmatch(r'{{\s*useSample\s*}}', a.get('onclick', '')): return ''
     if tag in ('helmet','script','style','link','meta'): return ''
     if tag=='sc-if': return '{('+value(a['value'],aliases)+') ? <>'+''.join(render(c,aliases)for c in children)+'</> : null}'
     if tag=='sc-for':
@@ -99,9 +101,11 @@ def adapt(logic,name):
     logic=logic.replace("'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs'", "'/vendor/pdf.worker.min.mjs'")
     logic=logic.replace("Promise.all([import('https://esm.sh/three@0.149.0'), import('https://esm.sh/three@0.149.0/examples/jsm/loaders/GLTFLoader.js')])", "Promise.all([Promise.resolve(window.THREE), import(/* webpackIgnore: true */ /* turbopackIgnore: true */ '/vendor/GLTFLoader-r149.js')])")
     logic=logic.replace("'uploads/hammer_optimized_14MB/hammer_optimized_14MB.glb'", "'/models/hammer.glb'")
-    logic=logic.replace("'uploads/bekvaem-step-stool-aspen__AA-323406-9-2.pdf'", "'/reference-assets/bekvaem-step-stool-aspen__AA-323406-9-2.pdf'")
     for old,new in ROUTES.items():logic=logic.replace(old,new)
     if name=='DrawingUploadReference':
+        logic=re.sub(r'(?m)^  async useSample\(\) \{[^\n]*\}\n?', '', logic)
+        logic=re.sub(r'(?m)^[ \t]*useSample:[ \t]*\(\)[ \t]*=>[ \t]*this\.useSample\(\),?[ \t]*\n?', '', logic)
+        if 'useSample' in logic: raise ValueError('예제 도면 로더가 남아 있습니다. 변환 규칙을 확인하세요.')
         logic=logic.replace("location.href = '/training/cards?new=1';", "saveGeneratedTraining(data, this.CARDS); location.href = '/training/cards?new=1';")
     # 시연용 전역 인스턴스는 React 밖으로 공개하지 않습니다.
     logic=logic.replace("if (!this._started) this.delay(() => this.startAll(), 0);", '')

@@ -6,9 +6,9 @@ import { Stage } from '@/components/common/Stage';
 import type { Product } from '@/types/training';
 import { SelectionBackdrop } from './SelectionBackdrop';
 import { SelectionHeader } from './SelectionHeader';
-import { getSelectionProducts, type SelectionProduct } from './selectionProducts';
-import { loadReferenceThree } from './referenceThree';
-import { mountReferenceShelf } from './referenceShelf';
+import { getSelectionProducts } from './selectionProducts';
+import { useSelectionScene } from './useSelectionScene';
+import { SceneLoadNotice } from './SceneLoadNotice';
 import type { FlowState, FlowAction } from '@/features/training-flow/state/flowReducer';
 import { ProcessOverlay, type ProcessElements } from '@/features/process-select/ProcessOverlay';
 import { TrainingPreparation } from '@/features/training-preparation/TrainingPreparation';
@@ -32,7 +32,6 @@ export function EducationSelectScreen({ productList, flowState, dispatch, hudCon
   const returnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const returningRef = useRef(false);
   const [isReturning, setIsReturning] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
   const selectionList = getSelectionProducts(productList);
   const productKey = JSON.stringify(selectionList);
   const labelWidth = Math.min(460, Math.floor(1760 / Math.max(1, selectionList.length))) - 40;
@@ -60,51 +59,12 @@ export function EducationSelectScreen({ productList, flowState, dispatch, hudCon
     return () => { layer.style.overflow = previous; layer.scrollTop = 0; layer.scrollLeft = 0; };
   }, []);
   useEffect(() => () => { if (returnTimerRef.current) clearTimeout(returnTimerRef.current); }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), 250); // 시안 startAll(): boot → product
-    return () => clearTimeout(timer);
-  }, []);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    let isMounted = true;
-    let dispose: (() => void) | undefined;
-    const products: SelectionProduct[] = JSON.parse(productKey);
-    void loadReferenceThree().then(async (three) => {
-      await document.fonts.ready;
-      if (!isMounted) return;
-      dispose = mountReferenceShelf(three, canvas, products, {
-        getHoveredIndex: () => currentRef.current.hoveredIndex,
-        onHover: (productIndex) => dispatch({ type: 'hoverProduct', productIndex }),
-        onSelect: (productIndex) => dispatch({ type: 'selectProduct', productIndex }),
-        getState: () => ({ activeIndex: currentRef.current.phase === 'select' ? null : currentRef.current.activeIndex,
-          selectedSection: currentRef.current.selectedSectionIndex, hoveredSection: currentRef.current.hoveredSectionIndex, isReturning: returningRef.current, isTransition: currentRef.current.phase === 'transition' || currentRef.current.phase === 'hud' }),
-        onHoverSection: (sectionIndex) => dispatch({ type: 'hoverSection', sectionIndex }),
-        onSelectSection: (sectionIndex) => dispatch({ type: 'selectSection', sectionIndex }),
-        onClearSection: () => dispatch({ type: 'clearSection' }), onBack: requestBack,
-        isLabelHovered: () => elements.current.labels.some((element) => !!element?.matches(':hover')),
-        isPanelTarget: (target) => target instanceof Node && !!elements.current.panel?.contains(target),
-        onBackVisible: (visible) => { if (elements.current.back) elements.current.back.style.opacity = visible ? '1' : '0'; },
-        onLabelPlacement: (index, placement) => {
-          const label = elements.current.labels[index], line = elements.current.lines[index];
-          if (label) {
-            label.style.left = `${placement.x}px`; label.style.top = `${placement.y}px`; label.style.opacity = placement.opacity;
-            label.style.background = placement.background; label.style.pointerEvents = placement.isVisible ? 'auto' : 'none';
-            if (placement.isVisible) label.style.transform = 'none';
-          }
-          if (line) { line.setAttribute('points', placement.points); line.style.opacity = placement.lineOpacity; }
-        },
-        onLabelPosition: (index, x, y) => {
-          const label = labelListRef.current[index];
-          if (label) { label.style.left = `${x.toFixed(1)}px`; label.style.top = `${y.toFixed(1)}px`; }
-        },
-      });
-    }).catch((error) => { if (isMounted) console.error(error); });
-    return () => { isMounted = false; dispose?.(); };
-  }, [productKey, dispatch, requestBack]);
+  const scene = useSelectionScene({ canvasRef, currentRef, returningRef, elements, labelListRef, productKey, dispatch, requestBack });
+  const isVisible = scene.status === 'ready';
 
-  return <Stage background={<SelectionBackdrop isProcess={isProcess} isFlat={isTransition} onElement={(element) => { backgroundRef.current = element; }} />} scene={<Canvas ref={canvasRef} $isVisible={isVisible} width={1920} height={1080} data-selection-canvas />}>
-    <SelectionHeader isVisible={isVisible} isProcess={isProcess} />
+  return <Stage background={<SelectionBackdrop isProcess={isProcess} isFlat={isTransition} onElement={(element) => { backgroundRef.current = element; }} />} scene={<Canvas key={scene.attempt} ref={canvasRef} $isVisible={isVisible} width={1920} height={1080} data-selection-canvas />}>
+    <SelectionHeader isVisible isProcess={isProcess} />
+    <SceneLoadNotice status={scene.status} onRetry={scene.handleRetry} />
     <LabelLayer ref={labelLayerRef} data-passthrough $isProcess={isProcess}>
       {selectionList.map((product, index) => <Label key={`${product.code}-${index}`} ref={(element) => { labelListRef.current[index] = element; }} $isLive={product.isLive} $isVisible={isVisible}>
         <Code $isCustom={product.isCustom}>{product.code}</Code>

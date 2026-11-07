@@ -8,6 +8,7 @@ import { ReferenceProcessScene } from '@/features/process-select/referenceProces
 import type { ProcessCallbacks } from '@/features/process-select/processTypes';
 
 interface ShelfCallbacks extends ProcessCallbacks {
+  onReady: () => void;
   getHoveredIndex: () => number | null;
   onHover: (index: number | null) => void;
   onSelect: (index: number) => void;
@@ -79,7 +80,7 @@ export function mountReferenceShelf(T: ReferenceThree, canvas: HTMLCanvasElement
   const handleClick = (event: MouseEvent) => { if (callbacks.getState().activeIndex !== null) return; const index = pickAt(event); if (index !== null) callbacks.onSelect(index); };
   canvas.addEventListener('pointermove', handleMove); canvas.addEventListener('wheel', handleWheel, { passive: false }); canvas.addEventListener('click', handleClick);
 
-  const startTime = performance.now(); let lastTime = startTime, animationFrame = 0, processBlend = 0;
+  const startTime = performance.now(); let lastTime = startTime, animationFrame = 0, processBlend = 0, isReady = false;
   const frame = () => {
     animationFrame = requestAnimationFrame(frame);
     const now = performance.now(); if (now - lastTime < 12) return;
@@ -123,6 +124,7 @@ export function mountReferenceShelf(T: ReferenceThree, canvas: HTMLCanvasElement
     });
     processScene.afterFrame(now, dt);
     renderer.render(scene, camera);
+    if (!isReady) { isReady = true; callbacks.onReady(); }
   };
   animationFrame = requestAnimationFrame(frame);
 

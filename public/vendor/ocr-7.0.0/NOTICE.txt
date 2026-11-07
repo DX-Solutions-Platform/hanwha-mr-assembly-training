@@ -1,0 +1,7 @@
+Tesseract.js 7.0.0, Tesseract.js-core 7.0.0; unmodified distribution files.
+Upstream: https://github.com/naptha/tesseract.js / https://github.com/naptha/tesseract.js-core
+Language data: @tesseract.js-data/{eng,kor} 1.0.0 / 4.0.0_best_int.
+Language upstream (Apache 2.0): https://github.com/naptha/tessdata
+Model SHA-256: {"eng":"45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91","kor":"78c21276ab14c9bb734d83be1055d9fe5469a4e7e977c51ad385be5737e61126"}
+Recreate with: node scripts/sync-ocr-runtime.cjs
+OCR runs locally in browser workers; no document is sent to an OCR service.

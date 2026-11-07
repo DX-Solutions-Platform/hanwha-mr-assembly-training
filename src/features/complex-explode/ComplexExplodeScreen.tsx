@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useReducer, useRef } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import styled from 'styled-components';
@@ -28,10 +28,10 @@ const TRANSITION_MS = 1800;
 /** 여객기·스마트폰: 2단계 분해 → 공정 선택 → 교육장 (한 화면) */
 export function ComplexExplodeScreen() {
   const [complexState, dispatch] = useReducer(complexReducer, initialComplexState);
-  const bridgeRef = useRef(createComplexBridge());
-  const sectionPointListRef = useRef(bridgeRef.current.sectionPointList);
-  const partPointListRef = useRef(bridgeRef.current.partPointList);
-  const exteriorPointListRef = useRef(bridgeRef.current.exteriorPointList);
+  const [bridge] = useState(createComplexBridge);
+  const sectionPointListRef = useRef(bridge.sectionPointList);
+  const partPointListRef = useRef(bridge.partPointList);
+  const exteriorPointListRef = useRef(bridge.exteriorPointList);
   const { modelId, phase, selectedSectionIndex, hoveredSectionIndex, isAssembled } = complexState;
   const modelSpec = useMemo(() => getModelSpec(modelId), [modelId]);
   const product = COMPLEX_PRODUCT_LIST.find((item) => item.modelId === modelId);
@@ -47,7 +47,7 @@ export function ComplexExplodeScreen() {
   const { hudState } = hudController;
   const scene = isHud
     ? <HudScene phase={hudState.phase} benchHeight={hudState.benchHeight} isLayoutEditing={hudState.isLayoutEditing} onExplodeDone={() => hudController.dispatch({ type: 'explodeDone' })} onPlacingDone={() => hudController.dispatch({ type: 'placingDone' })} />
-    : <ComplexScene complexState={complexState} dispatch={dispatch} bridge={bridgeRef.current} />;
+    : <ComplexScene complexState={complexState} dispatch={dispatch} bridge={bridge} />;
 
   return (
     <Stage background={<HorizonBackdrop isFlat={phase !== 'explode'} />} scene={scene}>

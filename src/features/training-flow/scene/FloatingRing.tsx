@@ -31,9 +31,11 @@ export function FloatingRing({ stationIndex, progress, isHovered, isVisible }: F
     group.position.y = -0.55 * (1 - introEase) - 0.4 * (1 - visibilityRef.current) + Math.sin(elapsed * 1.3 + stationIndex) * 0.012;
     group.rotation.z += deltaTime * 0.12;
     const glow = isHovered ? 1 : 0.6;
-    materialList[0].opacity = 0.9 * glow * visibility;
-    materialList[1].opacity = 0.35 * visibility;
-    materialList[2].opacity = 0.08 * glow * visibility;
+    // Animate the mounted Three objects through their scene ref.
+    const meshes = group.children as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
+    meshes[0].material.opacity = 0.9 * glow * visibility;
+    meshes[1].material.opacity = 0.35 * visibility;
+    meshes[2].material.opacity = 0.08 * glow * visibility;
   });
 
   return (

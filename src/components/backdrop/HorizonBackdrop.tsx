@@ -20,12 +20,13 @@ interface HorizonBackdropProps { isFlat?: boolean; hasIntro?: boolean; }
  */
 export function HorizonBackdrop({ isFlat = false, hasIntro = true }: HorizonBackdropProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [isTracking, setIsTracking] = useState(false);
+  const [tracking, setTracking] = useState({ isFlat, isReady: false });
+  if (tracking.isFlat !== isFlat) setTracking({ isFlat, isReady: false });
 
   useEffect(() => registerHorizonElement(rootRef.current), []);
   useEffect(() => {
-    if (!isFlat) { setIsTracking(false); return; }
-    const timerId = setTimeout(() => setIsTracking(true), FLATTEN_MS);
+    if (!isFlat) return;
+    const timerId = setTimeout(() => setTracking({ isFlat, isReady: true }), FLATTEN_MS);
     return () => clearTimeout(timerId);
   }, [isFlat]);
 
@@ -34,7 +35,7 @@ export function HorizonBackdrop({ isFlat = false, hasIntro = true }: HorizonBack
       <StarField />
       <TwinkleStarList />
       <ShootingStarList />
-      <PlanetRim isFlat={isFlat} isTracking={isTracking} hasIntro={hasIntro} />
+      <PlanetRim isFlat={isFlat} isTracking={isFlat && tracking.isFlat && tracking.isReady} hasIntro={hasIntro} />
       <SunGlow isFlat={isFlat} hasIntro={hasIntro} />
     </Root>
   );

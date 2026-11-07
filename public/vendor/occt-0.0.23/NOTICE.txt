@@ -1,0 +1,5 @@
+occt-import-js 0.0.23 / Open CASCADE WebAssembly runtime; unmodified distribution files.
+License texts are included alongside the JavaScript and WASM.
+Package and source: https://registry.npmjs.org/occt-import-js/-/occt-import-js-0.0.23.tgz
+Upstream: https://github.com/kovacsv/occt-import-js
+Recreate these assets: node scripts/sync-step-runtime.cjs
