@@ -195,11 +195,12 @@ async function checkBrowser() {
     await page.setViewport({ width: 2560, height: 1440 });
     await page.screenshot({ path: path.join(outputDirectory, 'upload-dev-2560.png') });
     await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' });
+    await page.click('a[href="/training/upload-dev"]');
     await page.waitForSelector('input[aria-label="분석할 PDF 선택"]');
     await upload(makePdfFixture(), 'main-route.pdf');
     await page.waitForSelector('[data-analysis-status=complete]', { timeout: 30000 });
-    assert.equal(await page.$$eval('[data-record=part]', (nodes) => nodes.length), 3, 'The main route must use actual PDF extraction');
-    assert.equal(await page.evaluate(() => document.body.textContent.includes('측면 다리 프레임')), false, 'The main route must not display fixed stool data');
+    assert.equal(await page.$$eval('[data-record=part]', (nodes) => nodes.length), 3, 'PDF analysis remains accessible from the STEP upload page');
+    assert.equal(await page.evaluate(() => document.body.textContent.includes('측면 다리 프레임')), false, 'PDF analysis must not display fixed stool data');
     assert.equal(await page.evaluate(() => document.body.textContent.includes('예시 도면 사용')), false, 'The legacy upload screen must not offer the deleted example');
     console.log('PASS browser: main/dev real PDF extraction, source review, HD/FHD/QHD, removed fixed stool results and deleted sample PDF 404');
     console.log('Screenshot: ' + path.join(outputDirectory, 'upload-dev-1920.png'));

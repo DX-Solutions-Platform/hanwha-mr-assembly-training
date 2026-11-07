@@ -5,7 +5,7 @@ import { cutCorner } from '@/styles/mixins';
 
 interface FlowTopBarProps { isSelectPhase: boolean; productName: string; onBack: () => void; }
 
-/** 상단: 왼쪽 "교육 선택"(분해 화면에서는 뒤로가기), 오른쪽 도면 업데이트 */
+/** 상단: 왼쪽 "교육 선택"(분해 화면에서는 뒤로가기), 오른쪽 조립품 가져오기 */
 export function FlowTopBar({ isSelectPhase, productName, onBack }: FlowTopBarProps) {
   return (
     <>
@@ -18,7 +18,7 @@ export function FlowTopBar({ isSelectPhase, productName, onBack }: FlowTopBarPro
       {isSelectPhase && (
         <Right>
           <HeaderLink href="/training/complex">복합 모델</HeaderLink>
-          <HeaderLink href="/training/upload">도면 업데이트</HeaderLink>
+          <HeaderLink href="/training/upload">조립품 가져오기</HeaderLink>
         </Right>
       )}
     </>

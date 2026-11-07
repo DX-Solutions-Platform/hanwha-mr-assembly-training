@@ -5,6 +5,8 @@ const vm = require('node:vm');
 const { createHash } = require('node:crypto');
 const { loadModule, analyze, tableTokens, makePdfFixture } = require('./verify-drawing-upload-dev.cjs');
 const { createStepModel, sameStepModel } = loadModule('model/stepModel');
+const { getStepAssemblyParts } = loadModule('model/stepAssemblyParts');
+const { moveInstruction, paginateInstructions } = loadModule('../drawing-upload/instructions/assemblyInstructions');
 const { bindStepShape, unbindStepShape } = loadModule('model/modelBindings');
 const { buildStepGeometry, findShapeAtFace } = loadModule('model/buildStepGeometry');
 const { groupParts, createPartReview, revisePart } = loadModule('review/reviewModel');
@@ -33,6 +35,27 @@ async function checkModel() {
   const nuts = assembly.manifest.shapeList.filter((shape) => shape.name === 'nut');
   assert.ok(nuts.length > 1); assert.notEqual(JSON.stringify(nuts[0].bounds), JSON.stringify(nuts[1].bounds), 'Assembly placement must be retained');
   assert.ok(assembly.manifest.shapeList.some((shape) => shape.path.includes('assembly')));
+  const grouped = getStepAssemblyParts({
+    ...assembly,
+    root: { name: 'assembly', meshes: [], children: [
+      { name: 'Repeated part', meshes: [0, 2], children: [] },
+      { name: 'Repeated part', meshes: [1], children: [] },
+    ] },
+  });
+  assert.deepEqual(Array.from(grouped[0].shapeIds), ['shape-0', 'shape-2'], 'A multi-body part is selected as a unit');
+  assert.deepEqual(Array.from(grouped[1].shapeIds), ['shape-1'], 'Equal names do not merge separate occurrences');
+  assert.equal(grouped.flatMap((part) => part.shapeIds).length, assembly.manifest.shapeList.length, 'Unlisted bodies are still selectable');
+  const instructions = Array.from({ length: 18 }, (_, index) => ({
+    id: String(index), section: index < 17 ? '조립' : '검사', partNumber: 1, description: '확인',
+  }));
+  const reordered = moveInstruction(instructions, '1', -1);
+  assert.equal(reordered[0].id, '1');
+  assert.equal(moveInstruction(reordered, '17', -1), reordered, 'A step cannot be reordered into a different section');
+  const sheets = paginateInstructions(reordered);
+  assert.equal(sheets.length, 2);
+  assert.equal(sheets[0][0].steps.length, 16);
+  assert.equal(sheets[1][0].offset, 16, 'Step numbering continues on the next sheet');
+  assert.equal(sheets[1][1].number, 2);
   const millimeter = await parse(path.join(fixtures, 'cube-units/cube-mm.step'));
   const inch = await parse(path.join(fixtures, 'cube-units/cube-in.step'));
   for (let axis = 0; axis < 3; axis++) {
@@ -94,6 +117,52 @@ async function checkBrowser() {
     const complete = () => page.waitForSelector('[data-step-status=complete]', { timeout: 45000 });
     const shape = (id) => page.click('[data-step-shape="shape-' + id + '"]');
     const exportData = async () => { await click('JSON 내보내기'); return page.evaluate(async () => JSON.parse(await window.__reviewExport.text())); };
+    await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[aria-label="STEP 조립품 업로드"]');
+    const [chooser] = await Promise.all([page.waitForFileChooser(), click('STEP 파일 선택')]);
+    await chooser.accept([cubeFile]);
+    await complete();
+    const drawing = '[aria-label="교육용 조립 도면"]';
+    await click('교육용 도면 보기');
+    await page.waitForFunction((selector) => {
+      const figure = document.querySelector(selector + ' img');
+      return figure?.complete && figure.naturalWidth > 0;
+    }, { timeout: 20000 }, drawing);
+    assert.equal(await page.$$eval(drawing + ' img', (nodes) => nodes.length), 1, 'An assembly drawing is available without selected parts or steps');
+    await click('닫기');
+    const part = '[aria-label="STEP 부품 목록"] button[aria-pressed]';
+    await page.click(part);
+    await page.waitForSelector(part + '[aria-pressed=true]');
+    await click('교육용 도면 보기');
+    await page.waitForSelector(drawing + ' img[alt$="부품 상세도"]', { timeout: 20000 });
+    await click('닫기');
+    await click('선택 부품만 보기'); await click('전체 보기');
+    await page.type('input[aria-label="부품 검색"]', 'no-match');
+    await page.waitForSelector(part, { hidden: true });
+    const standaloneCanvas = await page.waitForSelector('[aria-label="3D 형상 표시 영역"] canvas');
+    const standaloneBox = await standaloneCanvas.boundingBox();
+    await page.mouse.click(standaloneBox.x + standaloneBox.width / 2, standaloneBox.y + standaloneBox.height / 2);
+    await page.waitForSelector(part + '[aria-pressed=true]');
+    await click('작업 단계 등록');
+    await page.waitForSelector('dialog[open] textarea');
+    await page.type('dialog[open] textarea', 'Check the mounting position.');
+    await click('단계 추가');
+    await page.type('dialog[open] textarea', 'Place the part at the marked location.');
+    await click('단계 추가');
+    await click('1-2 단계 위로');
+    await click('시트 미리보기');
+    const sheet = '[aria-label="조립 순서 시트 1"]';
+    await page.waitForFunction((selector) => {
+      const drawings = document.querySelectorAll(selector + ' img');
+      return drawings.length === 2 && [...drawings].every((image) => image.complete && image.naturalWidth > 0);
+    }, { timeout: 20000 }, sheet);
+    assert.match(await page.$eval(sheet, (node) => node.textContent), /1-1.*Place the part.*1-2.*Check the mounting position/);
+    await click('닫기');
+    await upload(Buffer.from('invalid STEP'), 'invalid.step', '가져올 STEP 선택');
+    await page.waitForSelector('[data-step-status=error]');
+    assert.match(await page.$eval('[role=alert]', (node) => node.textContent), /유효한 STEP/);
+    assert.ok(await page.$(part), 'An invalid replacement preserves the current assembly');
+
     await page.goto('http://localhost:3000/training/upload-dev', { waitUntil: 'networkidle0' });
     await page.evaluate(() => { const original = URL.createObjectURL; URL.createObjectURL = function(blob) { if (blob.type === 'application/json') window.__reviewExport = blob; return original.call(this, blob); }; });
     await click('STEP · 3D 연결'); await stepUpload(cubeFile); await complete();

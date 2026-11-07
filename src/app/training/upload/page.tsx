@@ -1,8 +1,11 @@
-import { DrawingUploadDevScreen } from '@/features/drawing-upload-dev/DrawingUploadDevScreen';
-import { AWQ_SHAPE_NAME_MODEL, SHAPE_NAME_MODEL } from '@/features/drawing-upload-dev/shape-name/shapeNameTypes';
+import { redirect } from 'next/navigation';
+import { StepUploadScreen } from '@/features/drawing-upload/StepUploadScreen';
 
-export default async function DrawingUploadPage({ searchParams }: { searchParams: Promise<{ example?: string | string[]; qwen?: string | string[] }> }) {
-  const query = await searchParams;
-  const model = query.qwen === 'awq' ? AWQ_SHAPE_NAME_MODEL : SHAPE_NAME_MODEL;
-  return <DrawingUploadDevScreen initialMode={query.example === 'assembly' ? 'assembly' : query.example === 'flange' ? 'generate' : 'analysis'} shapeNameModel={query.qwen === 'off' ? null : model} />;
+export default async function StepUploadPage({ searchParams }: { searchParams: Promise<{ example?: string | string[]; qwen?: string | string[] }> }) {
+  const { example, qwen } = await searchParams;
+  const legacy = new URLSearchParams();
+  if (example === 'assembly' || example === 'flange') legacy.set('example', example);
+  if (qwen === 'off' || qwen === 'awq') legacy.set('qwen', qwen);
+  if (legacy.size) redirect('/training/upload-dev?' + legacy.toString());
+  return <StepUploadScreen />;
 }

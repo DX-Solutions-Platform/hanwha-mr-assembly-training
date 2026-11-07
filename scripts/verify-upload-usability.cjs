@@ -22,7 +22,7 @@ async function checkBrowser() {
       if (value) await page.keyboard.type(value); else await page.keyboard.press('Backspace'); await page.keyboard.press('Tab');
     };
     const worldX = () => page.$eval('[aria-label="선택 부품 실제 위치"]', (node) => Number(node.dataset.worldX));
-    await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' });
+    await page.goto('http://localhost:3000/training/upload-dev', { waitUntil: 'networkidle0' });
     assert.equal(await footerCount(), 1, 'The empty state keeps PDF selection in the upload area');
     await page.screenshot({ path: path.join(output, 'upload-empty-1920.png') });
     await page.focus('button[aria-label="예시로 둘러보기"]'); await page.keyboard.press('ArrowDown');

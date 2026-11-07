@@ -1,4 +1,6 @@
 export const STEP_IMPORTER = 'occt-import-js@0.0.23/mesh-v1';
+export const STEP_FILE_ACCEPT = '.step,.stp';
+export const STEP_MAX_FILE_MB = 25;
 export type VectorTuple = [number, number, number];
 export interface StepBounds { min: VectorTuple; max: VectorTuple; }
 export interface StepNode { name: string; meshes: number[]; children: StepNode[]; }
