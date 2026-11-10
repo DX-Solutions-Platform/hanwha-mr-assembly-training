@@ -14,11 +14,16 @@ export interface AssemblyInstruction {
   isConfirmed: boolean;
 }
 
+export function isBoltPart(partName: string) {
+  const name = partName.replace(/_/g, ' ');
+  return /\b(bolt|screw)\b|볼트|나사/i.test(name) || (/\btorx\b/i.test(name) && /\bm\d+(?:\.\d+)?\s*[x×]\s*\d/i.test(name));
+}
+
 export function createInstructionDrafts(parts: readonly StepAssemblyPart[]): AssemblyInstruction[] {
   return parts.map((part) => {
     const name = part.name.replace(/_/g, ' ');
     const isTorx = /\btorx\b/i.test(name);
-    const isScrewOrBolt = /\b(bolt|screw)\b|볼트|나사/i.test(name) || (isTorx && /\bm\d+(?:\.\d+)?\s*[x×]\s*\d/i.test(name));
+    const isScrewOrBolt = isBoltPart(name);
     const isNut = /\bnut\b|너트/i.test(name);
     const isWasher = /\bwasher\b|와셔/i.test(name);
     const isWiring = /\b(wire|cable|harness)\b|배선|전선|케이블/i.test(name);
@@ -58,17 +63,20 @@ export function createInstructionDrafts(parts: readonly StepAssemblyPart[]): Ass
   });
 }
 
-export function getInstructionDrawingTargets(part: StepAssemblyPart, base: StepAssemblyPart): {
+export function getInstructionDrawingTargets(part: StepAssemblyPart, base: StepAssemblyPart, otherInstalled: readonly StepAssemblyPart[] = []): {
   before: DrawingTarget; after: DrawingTarget;
 } {
   const bounds: StepBounds = { min: [...part.bounds.min], max: [...part.bounds.max] };
-  for (let axis = 0; axis < 3; axis++) {
-    bounds.min[axis] = Math.min(bounds.min[axis], base.bounds.min[axis]);
-    bounds.max[axis] = Math.max(bounds.max[axis], base.bounds.max[axis]);
+  for (const installed of [base, ...otherInstalled]) {
+    for (let axis = 0; axis < 3; axis++) {
+      bounds.min[axis] = Math.min(bounds.min[axis], installed.bounds.min[axis]);
+      bounds.max[axis] = Math.max(bounds.max[axis], installed.bounds.max[axis]);
+    }
   }
+  const installedIds = otherInstalled.length ? [...base.shapeIds, ...otherInstalled.flatMap((installed) => installed.shapeIds)] : base.shapeIds;
   return {
-    before: { bounds, shapeIds: base.shapeIds },
-    after: { bounds, shapeIds: [...base.shapeIds, ...part.shapeIds], highlightShapeIds: part.shapeIds },
+    before: { bounds, shapeIds: installedIds },
+    after: { bounds, shapeIds: [...installedIds, ...part.shapeIds], highlightShapeIds: part.shapeIds },
   };
 }
 
@@ -90,15 +98,26 @@ export function groupInstructions(instructions: readonly AssemblyInstruction[]) 
 }
 
 export function moveInstruction(instructions: AssemblyInstruction[], id: string, direction: -1 | 1) {
-  const index = instructions.findIndex((instruction) => instruction.id === id);
-  if (index < 0) return instructions;
-  const section = instructions[index].section;
-  const peerIndexes = instructions.flatMap((instruction, position) => instruction.section === section ? [position] : []);
-  const target = peerIndexes[peerIndexes.indexOf(index) + direction];
-  if (target === undefined) return instructions;
-  const next = [...instructions];
-  [next[index], next[target]] = [next[target], next[index]];
-  return next;
+  const source = instructions.find((instruction) => instruction.id === id);
+  if (!source) return instructions;
+  const peers = instructions.filter((instruction) => instruction.section === source.section);
+  const target = peers[peers.indexOf(source) + direction];
+  return target ? reorderInstruction(instructions, id, target.id, direction === 1) : instructions;
+}
+
+export function reorderInstruction(instructions: AssemblyInstruction[], id: string, targetId: string, after: boolean) {
+  if (id === targetId) return instructions;
+  const source = instructions.find((instruction) => instruction.id === id);
+  const target = instructions.find((instruction) => instruction.id === targetId);
+  if (!source || !target || source.section !== target.section) return instructions;
+  const peers = instructions.filter((instruction) => instruction.section === source.section);
+  const original = peers.indexOf(source);
+  peers.splice(original, 1);
+  const destination = peers.indexOf(target) + Number(after);
+  if (destination === original) return instructions;
+  peers.splice(destination, 0, source);
+  let index = 0;
+  return instructions.map((instruction) => instruction.section === source.section ? peers[index++] : instruction);
 }
 
 export const SHEET_COLUMNS = 2;

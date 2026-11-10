@@ -28,6 +28,7 @@ interface AssemblySelection {
 export function StepViewer({ step, assembly }: { step: StepController; assembly?: AssemblySelection }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isIsolated, setIsIsolated] = useState(false);
+  const [wireframe, setWireframe] = useState(false);
   const [view, setView] = useState({ command: 0, focusBounds: null as StepBounds | null });
   const [previewKey, setPreviewKey] = useState(0);
   const shape = step.model?.manifest.shapeList.find((item) => item.id === step.selectedId);
@@ -52,7 +53,8 @@ export function StepViewer({ step, assembly }: { step: StepController; assembly?
     </Metadata>
     <Viewport aria-label="3D 형상 표시 영역">
       {step.model ? <StepPreviewBoundary key={step.model.manifest.sha256 + '-' + previewKey} onRetry={() => setPreviewKey((value) => value + 1)}>
-        <StepScene model={step.model} selectedShapeIds={selectedShapeIds} isIsolated={isIsolated} command={view.command} focusBounds={view.focusBounds} onSelect={selectShape} />
+        <StepScene model={step.model} selectedShapeIds={selectedShapeIds} isIsolated={isIsolated} command={view.command} focusBounds={view.focusBounds}
+          onSelect={selectShape} wireframe={wireframe} />
       </StepPreviewBoundary> : <Empty><strong>STEP 파일을 올려 주세요.</strong><Muted>모델을 선택하고 검토한 부품번호에 연결할 수 있습니다.</Muted><ActionButton $primary onClick={openFile}>STEP 파일 선택</ActionButton></Empty>}
     </Viewport>
     <Toolbar>
@@ -61,6 +63,9 @@ export function StepViewer({ step, assembly }: { step: StepController; assembly?
       <ToolButton disabled={!selectedBounds} aria-pressed={isIsolated} onClick={() => setIsIsolated((value) => !value)}>
         {isIsolated ? (assembly ? '전체 보기' : '전체 표시') : (assembly ? '선택 부품만 보기' : '선택만 표시')}
       </ToolButton>
+      {assembly && <ToolButton disabled={!step.model} $primary={wireframe} aria-pressed={wireframe} onClick={() => setWireframe((value) => !value)}>
+        와이어프레임 보기
+      </ToolButton>}
     </Toolbar>
     <Selection>{selection ? '선택: ' + selection : assembly ? '왼쪽 목록이나 3D 화면에서 부품을 선택하세요.' : '3D 형상이나 오른쪽 목록을 선택하세요.'}</Selection>
     {!assembly && <input ref={inputRef} type="file" accept={STEP_FILE_ACCEPT} aria-label="미리볼 STEP 선택" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void step.load(file); event.target.value = ''; }} />}
@@ -70,6 +75,6 @@ const Metadata = styled.div(({ theme }) => ({ display: 'flex', flexDirection: 'c
 const Status = styled.div(({ theme }) => ({ display: 'flex', alignItems: 'center', gap: theme.space[3], color: theme.color.warning, fontSize: theme.size.sm, lineHeight: 1.6, button: { color: theme.color.primarySoft, textDecoration: 'underline' } }));
 const Viewport = styled.div(({ theme }) => ({ position: 'relative', flex: 1, minHeight: theme.space[8] * 3, background: theme.color.bgMid, overflow: 'hidden' }));
 const Empty = styled.div(({ theme }) => ({ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: theme.space[5], padding: theme.space[5], textAlign: 'center', strong: { fontSize: theme.size.xl } }));
-const Toolbar = styled.div(({ theme }) => ({ display: 'flex', gap: theme.space[2], padding: theme.space[3], flexShrink: 0 }));
-const ToolButton = styled(ActionButton)(({ theme }) => ({ flex: 1, minHeight: theme.space[6], fontSize: theme.size.sm }));
+const Toolbar = styled.div(({ theme }) => ({ display: 'flex', flexWrap: 'wrap', gap: theme.space[2], padding: theme.space[3], flexShrink: 0 }));
+const ToolButton = styled(ActionButton)(({ theme }) => ({ flex: 1, minHeight: theme.space[6], fontSize: theme.size.sm, whiteSpace: 'nowrap' }));
 const Selection = styled.div(({ theme }) => ({ padding: theme.space[3], color: theme.color.primarySoft, fontSize: theme.size.sm, borderTop: '1px solid ' + theme.color.primaryLineWeak, overflowWrap: 'anywhere', flexShrink: 0 }));

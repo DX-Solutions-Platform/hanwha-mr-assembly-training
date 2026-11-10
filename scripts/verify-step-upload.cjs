@@ -6,11 +6,20 @@ const { createHash } = require('node:crypto');
 const { loadModule, analyze, tableTokens, makePdfFixture } = require('./verify-drawing-upload-dev.cjs');
 const { createStepModel, sameStepModel } = loadModule('model/stepModel');
 const { getStepAssemblyParts } = loadModule('model/stepAssemblyParts');
-const { isPracticeReady, getPracticeFocus } = loadModule('../drawing-upload/practice/stepPracticeConfig');
-const { advancePracticeTurn, getPracticeResistance, getPreparationOffset, PREPARATION_CENTER } = loadModule('../drawing-upload/practice/stepPracticeMotion');
-const { createInstructionDrafts, getInstructionDrawingTargets, moveInstruction, nextUnconfirmedInstruction, paginateInstructions } = loadModule('../drawing-upload/instructions/assemblyInstructions');
+const { isPracticeReady } = loadModule('../drawing-upload/practice/stepPracticeConfig');
+const { createManualPracticeSequence, createProductPracticeSequence, getPracticeInstalledParts, getProductPlacementCaption, moveProductPracticeStage } = loadModule('../drawing-upload/practice/stepPracticeSequence');
+const { getFastenerEnds, getFastenerHead, matchFastenerHead } = loadModule('../drawing-upload/practice/fastenerHead');
+const { getPracticeToolKind, getPracticeToolShape, getPracticeToolView } = loadModule('../drawing-upload/practice/practiceToolGeometry');
+const { advancePracticeTurn, canPlacePracticeTraySlot, clampPracticeTraySlot, getPracticeFasteningFocus, getPracticePartSurface, getPracticeResistance, getPracticeTrayHomeX, getPracticeTrayPlacementIssue, getPracticeTraySurface, getPracticeWorkbench, getPreparationOffset, getSeatingClearance, layoutPracticeTray, PREPARATION_CENTER } = loadModule('../drawing-upload/practice/stepPracticeMotion');
+const { clampPracticeCardSize, readPracticeCaption, readPracticeCardChange, readPracticeSceneCard, readPracticeTrayLayout, readPracticeTraySettings, trayTravel } = loadModule('../drawing-upload/practice/practiceTrayLayout');
+const { getPracticeCardImageRequests } = loadModule('../drawing-upload/practice/practiceCardFigures');
+const { PRACTICE_CARD_THEMES } = loadModule('../drawing-upload/practice/practiceCardThemes');
+const { getPracticePartCorners, getPracticePickupPose, isPracticePartVisible } = loadModule('../drawing-upload/practice/practicePartPickup');
+const { createInstructionDrafts, getInstructionDrawingTargets, moveInstruction, reorderInstruction, nextUnconfirmedInstruction, paginateInstructions } = loadModule('../drawing-upload/instructions/assemblyInstructions');
 const { bindStepShape, unbindStepShape } = loadModule('model/modelBindings');
-const { buildStepGeometry, findShapeAtFace } = loadModule('model/buildStepGeometry');
+const { buildStepGeometry, buildStepStructureGeometry, findShapeAtFace } = loadModule('model/buildStepGeometry');
+const { createStepStructureEdges } = loadModule('model/stepStructureEdges');
+const { fitStepViewDistance } = loadModule('model/stepCameraFraming');
 const { groupParts, createPartReview, revisePart } = loadModule('review/reviewModel');
 const { createReviewPackage, decodeReview } = loadModule('review/reviewPersistence');
 const fixtures = path.join(path.dirname(require.resolve('occt-import-js/package.json')), 'test/testfiles');
@@ -49,21 +58,120 @@ async function checkModel() {
   assert.equal(grouped.flatMap((part) => part.shapeIds).length, assembly.manifest.shapeList.length, 'Unlisted bodies are still selectable');
   const [basePart, mountingPart] = grouped;
   const practicePick = { point: [0.5, 0, 0], normal: [0, 0, 1] };
-  const practiceConfig = {
+  const firstMount = {
     placement: { partNumber: basePart.number, pick: practicePick },
+    support: { partNumber: grouped[2].number, pick: practicePick },
+    purpose: '다음 단계에서 고정할 두 구멍을 맞춥니다.',
+  };
+  const secondMount = {
+    placement: { partNumber: grouped[3].number, pick: practicePick },
+    support: firstMount.placement,
+    purpose: '먼저 장착한 부품에 맞춥니다.',
+  };
+  const practiceConfig = {
+    mounts: [firstMount, secondMount],
     fastening: { partNumber: mountingPart.number, pick: practicePick },
     tool: 'Torx 비트', torque: '1.0', exampleTorque: true,
   };
   assert.equal(isPracticeReady(practiceConfig, grouped.length), true);
-  assert.equal(isPracticeReady({ ...practiceConfig, fastening: practiceConfig.placement }, grouped.length), false);
+  const manualSequence = createManualPracticeSequence(practiceConfig, practicePick);
+  assert.deepEqual(Array.from(getPracticeInstalledParts(manualSequence, 0)), [grouped[2].number]);
+  assert.deepEqual(Array.from(getPracticeInstalledParts(manualSequence, 1)), [grouped[2].number, basePart.number]);
+  assert.deepEqual(Array.from(getPracticeInstalledParts(manualSequence, 2)), [grouped[2].number, basePart.number, grouped[3].number]);
+  assert.equal(manualSequence.stages[2].kind, 'fasten');
+  assert.equal(isPracticeReady({ ...practiceConfig, mounts: [{ ...firstMount, support: undefined }] }, grouped.length), false);
+  assert.equal(isPracticeReady({ ...practiceConfig, mounts: [{ ...firstMount, purpose: ' ' }] }, grouped.length), false);
+  assert.equal(isPracticeReady({ ...practiceConfig, mounts: [{ ...firstMount, support: { ...firstMount.support, pick: { ...practicePick, point: [-0.5, 0, 0] } } }] }, grouped.length), false);
+  assert.equal(isPracticeReady({ ...practiceConfig, mounts: [firstMount, { ...secondMount, support: practiceConfig.fastening }] }, grouped.length), false);
+  assert.equal(isPracticeReady({ ...practiceConfig, mounts: [firstMount, firstMount] }, grouped.length), false);
+  assert.equal(isPracticeReady({ ...practiceConfig, fastening: firstMount.placement }, grouped.length), false);
   assert.equal(isPracticeReady({ ...practiceConfig, torque: '작업지시서 확인' }, grouped.length), false);
   assert.equal(isPracticeReady({ ...practiceConfig, fastening: { partNumber: mountingPart.number } }, grouped.length), false);
-  const focus = getPracticeFocus({ min: [-10, -10, -10], max: [10, 10, 10] }, mountingPart.bounds, practicePick.point, 0.1);
-  assert.equal((focus.min[0] + focus.max[0]) / 2, 5, 'The enlarged view centers on the point set in the authoring viewport');
   const modelBounds = { min: [-10, -10, -10], max: [10, 10, 10] };
   const [stagingX] = getPreparationOffset(modelBounds, modelBounds, 0.1);
   assert.equal(stagingX, PREPARATION_CENTER);
   assert.ok(stagingX - 1 > 1, 'Even the widest part starts clear of the assembly area');
+  assert.equal(getSeatingClearance(modelBounds, 0.1), 0.234);
+  const trayBounds = Array.from({ length: 30 }, (_, index) => ({ min: [-2, -1, 0], max: [1 + index % 4, 2 + index % 3, 3] }));
+  const bench = getPracticeWorkbench(modelBounds, modelBounds, 0.1);
+  const trayHomeX = getPracticeTrayHomeX(bench);
+  const tray = layoutPracticeTray(modelBounds, trayBounds, 0.1, [], { homeX: trayHomeX });
+  assert.ok(Math.abs(bench.width - 2.96 * 1.6) < 1e-8, 'The table is exactly 1.6 times as wide');
+  assert.equal(bench.depth, 3.2);
+  assert.equal(bench.x, 0);
+  assert.ok(bench.x + bench.width / 2 < tray.limits.left + trayHomeX + trayTravel.minX, 'The entire tray stays to the right of the table at its closest position');
+  const oldMapWidth = Math.max(12, (tray.frame.right + 1.2) * 1.55, tray.frame.halfDepth * 3);
+  assert.equal(tray.map.width, oldMapWidth * 1.5, 'The floor is exactly 1.5 times as wide');
+  assert.equal(tray.map.depth, oldMapWidth, 'The floor keeps its original depth');
+  assert.ok(tray.frame.editRight <= tray.map.x + tray.map.width / 2);
+  assert.ok(Math.abs(tray.limits.right + trayHomeX + trayTravel.maxX - tray.frame.editRight) < 1e-8, 'The full tray stays on the floor when shifted right');
+  assert.equal(tray.slots.length, 30);
+  assert.ok(tray.slots.every(({ x, y, width }, index) => x - width / 2 > 1 && canPlacePracticeTraySlot(tray, index, [x, y])));
+  assert.equal(canPlacePracticeTraySlot(tray, 0, [tray.slots[1].x, tray.slots[1].y]), false);
+  assert.equal(getPracticeTrayPlacementIssue(tray, 0, [tray.slots[1].x, tray.slots[1].y]), 'occupied');
+  const customPosition = Array.from(clampPracticeTraySlot(tray, 0, [100, -100]));
+  assert.equal(getPracticeTrayPlacementIssue(tray, 0, [customPosition[0] + 0.05, customPosition[1]]), 'outside');
+  assert.equal(getPracticeTrayPlacementIssue(tray, 0, customPosition), null, 'Dropping at the actual boundary remains valid');
+  assert.equal(canPlacePracticeTraySlot(tray, 0, customPosition), true);
+  const savedLayout = readPracticeTrayLayout(JSON.parse(JSON.stringify({ 'part-1': customPosition, 'group-2-3': [3, 0] })));
+  const restoredTray = layoutPracticeTray(modelBounds, trayBounds, 0.1, [savedLayout['part-1']], { homeX: trayHomeX });
+  assert.equal(restoredTray.slots[0].y, customPosition[1]);
+  assert.equal(restoredTray.slots[0].x, customPosition[0]);
+  assert.equal(restoredTray.slots[1].y, tray.slots[1].y, 'Older arrangements keep their slot positions');
+  assert.deepEqual(restoredTray.slots[1].offset, tray.slots[1].offset, 'Moving a part leaves the other parts in place');
+  const defaultSurface = getPracticeTraySurface(tray.slots);
+  const resizedSurface = getPracticeTraySurface(restoredTray.slots);
+  assert.ok(resizedSurface.width > defaultSurface.width && resizedSurface.depth > defaultSurface.depth, 'Dragging beyond the box grows the surface');
+  assert.deepEqual(resizedSurface, getPracticeTraySurface(tray.slots, { index: 0, point: customPosition }), 'The drag preview and saved bounds match');
+  assert.deepEqual(defaultSurface, getPracticeTraySurface(restoredTray.slots, { index: 0, point: [tray.slots[0].x, tray.slots[0].y] }),
+    'Moving the farthest part inward shrinks the box');
+  const rowBounds = trayBounds.slice(0, 13);
+  const compactTray = layoutPracticeTray(modelBounds, rowBounds, 0.1, [], { homeX: trayHomeX });
+  let nextSlotLeft = compactTray.limits.left;
+  const rowPositions = Array.from(compactTray.slots, ({ width }) => {
+    const x = nextSlotLeft + width / 2;
+    nextSlotLeft += width;
+    return [x, 0];
+  });
+  const rowTray = layoutPracticeTray(modelBounds, rowBounds, 0.1, rowPositions, { homeX: trayHomeX });
+  assert.deepEqual(Array.from(rowTray.slots, ({ x, y }) => [x, y]), rowPositions, 'The positions of all 13 parts in a long row restore');
+  const rowSurface = getPracticeTraySurface(rowTray.slots);
+  const compactSurface = getPracticeTraySurface(compactTray.slots);
+  assert.ok(rowSurface.width > compactSurface.width * 2 && rowSurface.depth < compactSurface.depth, 'A long row grows in width independently of depth');
+  assert.equal(Object.keys(readPracticeTraySettings({ positions: savedLayout }).trayOffsets).length, 0);
+  const cardId = 'a'.repeat(32);
+  assert.equal(readPracticeCaption({ key: 'part-1', text: '  위치를 맞추세요.  ' }).text, '위치를 맞추세요.');
+  assert.equal(readPracticeCardChange({ key: 'part-1', id: cardId, card: { text: '설명', position: [0, 0, Infinity] } }), null);
+  const spatialSettings = readPracticeTraySettings({ positions: savedLayout,
+    cards: { 'part-1': { [cardId]: { text: '설명', position: [1, -0.3, 0.5] } } } });
+  assert.deepEqual(Array.from(spatialSettings.cards['part-1'][cardId].position), [1, -0.3, 0.5]);
+  assert.equal(spatialSettings.cards['part-1'][cardId].layout, 'text', 'Legacy text cards retain their content and position');
+  assert.equal(spatialSettings.cards['part-1'][cardId].theme, 'orange', 'Legacy cards receive the original warm theme');
+  const geometry = { position: [1, 0, 0.5], size: { width: 380, height: 240 } };
+  assert.equal(readPracticeSceneCard({ ...geometry, layout: 'text', title: '방향', text: '' }).title, '방향');
+  assert.equal(readPracticeSceneCard({ ...geometry, layout: 'image', image: { kind: 'during' }, title: '숨김' }).title, '');
+  const combinedCard = readPracticeSceneCard({ ...geometry, layout: 'combined', image: { kind: 'after' }, imageShare: 68, text: '체결 확인' });
+  assert.equal(combinedCard.image.kind, 'after');
+  assert.equal(combinedCard.imageShare, 68, 'Combined cards restore the image share from saved settings');
+  assert.equal(PRACTICE_CARD_THEMES.length, 10);
+  assert.ok(PRACTICE_CARD_THEMES.every(({ id }) => readPracticeSceneCard({ ...combinedCard, theme: id })?.theme === id));
+  assert.equal(readPracticeSceneCard({ ...combinedCard, theme: 'custom' }), null);
+  assert.equal(readPracticeSceneCard({ ...combinedCard, imageShare: 90 }), null);
+  assert.equal(readPracticeSceneCard({ ...geometry, layout: 'combined', text: '이미지 없음' }), null);
+  assert.equal(readPracticeSceneCard({ ...geometry, layout: 'image', image: { kind: 'upload', src: 'data:image/svg+xml;base64,AAAA' } }), null);
+  assert.equal(clampPracticeCardSize({ width: 900, height: 10 }).height, 124);
+  assert.equal(readPracticeCardChange({ key: 'part-1', id: cardId, geometry }).geometry.size.width, 380);
+  const settings = readPracticeTraySettings(JSON.parse(JSON.stringify({ positions: savedLayout, trayOffsets: { product: [0.4, -0.8], 'area-2-3': [0, 1] } })));
+  assert.deepEqual(Array.from(settings.trayOffsets.product), [0.4, -0.8]);
+  assert.deepEqual(Array.from(settings.positions['part-1']), customPosition);
+  assert.equal(readPracticeTraySettings({ positions: {}, trayOffsets: { product: [trayTravel.minX - 0.1, 0] } }), null);
+  assert.equal(readPracticeTraySettings({ positions: {}, trayOffsets: { product: [0, trayTravel.maxY + 0.1] } }), null);
+  assert.equal(readPracticeTraySettings({ positions: {}, trayOffsets: { 'part-1': [0.4, 0] } }), null);
+  assert.equal(readPracticeTrayLayout({ 'part-1': [Infinity, 0] }), null);
+  assert.equal(readPracticeTrayLayout({ '../file': [3, 0] }), null);
+  assert.notEqual(getPracticePartSurface(1).color, getPracticePartSurface(2).color);
+  assert.ok(getPracticePartSurface(1, 'Torx Bolt').metalness > getPracticePartSurface(1, 'Wire').metalness);
+  assert.ok(getPracticePartSurface(1, 'Wire').roughness > getPracticePartSurface(1, 'Torx Bolt').roughness);
   const looseTurn = advancePracticeTurn(0.35, Math.PI / 12);
   const loadedTurn = advancePracticeTurn(0.96, Math.PI / 12);
   assert.ok(loadedTurn.rotation < looseTurn.rotation / 3, 'The same input moves the tool less as the fastener seats');
@@ -79,6 +187,171 @@ async function checkModel() {
     assert.equal(after.bounds.max[axis], Math.max(basePart.bounds.max[axis], mountingPart.bounds.max[axis]));
   }
   assert.equal(createInstructionDrafts([mountingPart])[0].basePartNumber, undefined);
+  const { CylinderGeometry, PerspectiveCamera, Vector3 } = require('three');
+  const target = new Vector3(), direction = new Vector3(0, -1, 0.9).normalize();
+  const frameHalfDepth = Math.max(bench.depth / 2, tray.frame.halfDepth) + 0.1;
+  const frameMin = [bench.x - bench.width / 2 - 0.12, -frameHalfDepth, -1.05];
+  const frameMax = [tray.frame.editRight + 0.12, frameHalfDepth, 1];
+  const aspect = 1600 / 760, fov = 37;
+  const camera = new PerspectiveCamera(fov, aspect, 0.001, 1000);
+  camera.position.copy(direction).multiplyScalar(fitStepViewDistance(frameMin, frameMax, target, direction, fov * Math.PI / 180, aspect));
+  camera.up.set(0, 0, 1); camera.lookAt(target); camera.updateMatrixWorld();
+  assert.ok(Math.abs(target.clone().project(camera).x) < 1e-8, 'The assembly stays horizontally centered');
+  for (const y of [frameMin[1], frameMax[1]]) for (const z of [frameMin[2], frameMax[2]]) {
+    const corner = new Vector3(frameMax[0], y, z).project(camera);
+    assert.ok(corner.x > 0 && corner.x < 1 && Math.abs(corner.y) < 1, 'The rightmost tray corners fit without shifting the assembly');
+  }
+  const benchDistance = camera.position.length();
+  const focusPoint = [0.64, -0.18, 0.33], boltTarget = new Vector3(...focusPoint);
+  const boltFocus = getPracticeFasteningFocus(modelBounds, focusPoint, 0.1, 0.16);
+  const boltDirection = direction.clone().add(new Vector3(0, 0, 2)).normalize();
+  const focusDistance = fitStepViewDistance(boltFocus.min.map((value) => value * 0.1),
+    boltFocus.max.map((value) => value * 0.1), boltTarget, boltDirection, fov * Math.PI / 180, aspect);
+  assert.ok(focusDistance < benchDistance / 3, 'Fastening brings the actual camera closer');
+  camera.position.copy(boltTarget).addScaledVector(boltDirection, focusDistance);
+  camera.lookAt(boltTarget); camera.updateMatrixWorld();
+  const boltScreenPoint = boltTarget.clone().project(camera);
+  assert.ok(Math.hypot(boltScreenPoint.x, boltScreenPoint.y) < 1e-8, 'The rotation overlay aligns with an off-center bolt after zooming');
+  const pickupModel = { min: [-10, -10, -4], max: [10, 10, 4] };
+  const pickupPart = { min: [-7, -5, -3], max: [8, 5, 0] };
+  const pickupCorners = getPracticePartCorners(pickupModel, pickupPart, 0.1);
+  const smallPartCorners = getPracticePartCorners(pickupModel, { min: [-2, -2, -1], max: [-1.7, -1.6, -0.6] }, 0.1);
+  for (const viewAspect of [2.1, 1.35, 0.8]) {
+    camera.aspect = viewAspect;
+    camera.updateProjectionMatrix();
+    const closeDistance = fitStepViewDistance([-1, -1, -0.4], [1, 1, 0.4], target, direction, fov * Math.PI / 180, viewAspect);
+    camera.position.copy(direction).multiplyScalar(closeDistance);
+    camera.lookAt(target); camera.updateMatrixWorld();
+    assert.equal(isPracticePartVisible(camera, pickupCorners, [trayHomeX + 4, 0, 0], new Vector3()), false,
+      'An out-of-view preparation part is available through the pickup list');
+    assert.equal(isPracticePartVisible(camera, pickupCorners, [0, 0, 0], new Vector3()), true);
+    for (const angle of [direction, new Vector3(-0.84, 0.45, 0.24).normalize()]) {
+      camera.position.copy(angle).multiplyScalar(closeDistance);
+      camera.lookAt(target); camera.updateMatrixWorld();
+      for (const corners of [pickupCorners, smallPartCorners]) {
+        const pose = getPracticePickupPose(camera, corners, target);
+        const aimX = viewAspect < 1.25 ? -0.3 : 0;
+        const projectedCorners = Array.from(corners, (corner) => {
+          const point = corner.clone().multiplyScalar(pose.scale).add(new Vector3(...pose.offset));
+          const localDepth = -point.clone().applyMatrix4(camera.matrixWorldInverse).z;
+          assert.ok(localDepth > camera.near && localDepth < closeDistance * 0.4, 'Retrieved parts are in the foreground');
+          const screen = point.project(camera);
+          assert.ok(Math.abs(screen.x - aimX) <= 0.42 + 1e-8 && screen.y >= 0.35 - 1e-8 && screen.y <= 0.88 + 1e-8,
+            'The retrieved part fits the upper view after orbiting or resizing');
+          return screen;
+        });
+        const spans = ['x', 'y'].map((axis) => {
+          const values = projectedCorners.map((point) => point[axis]);
+          return Math.max(...values) - Math.min(...values);
+        });
+        assert.ok(Math.max(...spans) > 0.33, 'Long and small retrieved parts remain large enough to pick up');
+      }
+    }
+  }
+  const tilt = Math.PI / 4;
+  const fastenerGeometry = new CylinderGeometry(1, 0.55, 3, 48).rotateX(tilt);
+  fastenerGeometry.computeBoundingBox();
+  const fastenerBounds = { min: fastenerGeometry.boundingBox.min.toArray(), max: fastenerGeometry.boundingBox.max.toArray() };
+  const fastenerMesh = {
+    name: 'tilted fastener', color: null, position: fastenerGeometry.getAttribute('position').array,
+    index: new Uint32Array(fastenerGeometry.index.array), origin: [0, 0, 0], bounds: fastenerBounds, normal: null,
+  };
+  const fastenerModel = createStepModel({ name: 'fastener.stp', size: 1 }, 'test', { name: '', meshes: [0], children: [] }, [fastenerMesh]);
+  const [tiltedPart] = getStepAssemblyParts(fastenerModel);
+  const expectedAxis = new Vector3(0, Math.cos(tilt), Math.sin(tilt));
+  const boltHead = getFastenerHead(fastenerModel, tiltedPart, { point: [0.12, 0.5, 0.5], normal: [1, 0, 0] });
+  assert.ok(expectedAxis.distanceTo(new Vector3(...boltHead.normal)) < 0.001, 'A side-wall click must preserve the tilted shaft axis');
+  assert.ok(new Vector3(...boltHead.point).cross(expectedAxis).length() < 0.001, 'The tool pivots at the center of the head');
+  const ends = getFastenerEnds(fastenerModel, tiltedPart);
+  assert.equal(ends.length, 1, 'A wider head distinguishes the working end from the tip');
+  assert.ok(matchFastenerHead(ends, boltHead));
+  assert.equal(matchFastenerHead(ends, { ...boltHead, point: boltHead.point.map((value) => -value) }), undefined, 'The tip cannot confirm tool placement');
+  const side = new Vector3(...boltHead.point).add(new Vector3(ends[0].radius, 0, 0));
+  assert.equal(matchFastenerHead(ends, { point: side.toArray(), normal: [1, 0, 0] }), undefined, 'The side cannot confirm tool placement');
+  assert.equal(getPracticeToolKind('5 mm 육각 렌치', 'Torx bolt'), 'hex-key', 'The configured tool takes precedence');
+  assert.equal(getPracticeToolKind('규격 확인', 'Phillips Flat Head Screw'), 'phillips');
+  assert.equal(getPracticeToolKind('Torx 비트', 'Screw'), 'torx');
+  assert.equal(getPracticeToolKind('일자 드라이버', 'Screw'), 'slotted');
+  assert.equal(getPracticeToolKind('래칫 소켓', 'Hex bolt'), 'socket');
+  const recessedHead = { ...boltHead, driveDepth: ends[0].radius * 0.2 };
+  const hexTool = getPracticeToolShape('hex-key', recessedHead, 0.16);
+  const driverTool = getPracticeToolShape('torx', recessedHead, 0.16);
+  assert.ok(hexTool.depth > 0 && hexTool.depth < recessedHead.driveDepth, 'The bit enters the recess without passing its floor');
+  assert.equal(getPracticeToolShape('torx', { ...recessedHead, driveDepth: 0 }, 0.16).depth, 0);
+  assert.ok(driverTool.axial > hexTool.axial && hexTool.radial > driverTool.radial);
+  for (const shape of [hexTool, driverTool]) {
+    const view = getPracticeToolView(modelBounds, recessedHead, 0.1, 0.16, shape, [0, -1, 0.9]);
+    const axis = new Vector3(...recessedHead.normal);
+    const angle = new Vector3(...view.direction).dot(axis);
+    assert.ok(angle > 0.65 && angle < 0.85);
+    const approachEnd = new Vector3(...recessedHead.point).addScaledVector(axis, shape.axial + shape.standoff).toArray();
+    for (let index = 0; index < 3; index++) {
+      const value = approachEnd[index] / 0.1 + (modelBounds.min[index] + modelBounds.max[index]) / 2;
+      assert.ok(view.bounds.min[index] <= value + 1e-8 && view.bounds.max[index] >= value - 1e-8, 'The close-up includes the tool before it seats');
+    }
+  }
+  const thirtyParts = Array.from({ length: 30 }, (_, index) => ({ ...tiltedPart, number: index + 1,
+    name: index === 1 || index === 14 ? 'Torx bolt' : `Part ${index + 1}` }));
+  const thirtyInstructions = createInstructionDrafts(thirtyParts);
+  const defaultSequence = createProductPracticeSequence(fastenerModel, thirtyParts, thirtyInstructions);
+  assert.equal(getProductPlacementCaption(defaultSequence.stages[0], '하우징'),
+    '오른쪽 부품(하우징)을 집어 중앙의 주황색 윤곽에 맞춰 놓으세요.');
+  assert.match(getProductPlacementCaption(defaultSequence.stages[0], '하우징', true), /^화면 위쪽의 부품/);
+  assert.deepEqual(Array.from(defaultSequence.stages, ({ target }) => target.partNumber), thirtyParts.map(({ number }) => number));
+  assert.deepEqual(Array.from(getPracticeInstalledParts(defaultSequence, 0)), [], 'The first part belongs to the product practice');
+  assert.equal(defaultSequence.stages[1].kind, 'mount', 'An unconfirmed tool specification does not set a torque target');
+  const confirmedOrder = [thirtyInstructions[2], ...thirtyInstructions.slice(0, 2), ...thirtyInstructions.slice(3)];
+  for (const step of confirmedOrder) step.isConfirmed = true;
+  confirmedOrder.find(({ partNumber }) => partNumber === 2).torque = '1.2 N·m';
+  confirmedOrder.find(({ partNumber }) => partNumber === 15).torque = '1.5 Nm';
+  const productSequence = createProductPracticeSequence(fastenerModel, thirtyParts, confirmedOrder);
+  assert.deepEqual(Array.from(productSequence.stages, ({ target }) => target.partNumber), confirmedOrder.map(({ partNumber }) => partNumber));
+  assert.deepEqual(Array.from(productSequence.stages.filter(({ kind }) => kind === 'fasten'), ({ torque }) => torque), [1.2, 1.5]);
+  assert.deepEqual(Array.from(getPracticeInstalledParts(productSequence, 15)), confirmedOrder.slice(0, 15).map(({ partNumber }) => partNumber));
+  assert.equal(getPracticeInstalledParts(productSequence, 30).length, 30);
+  const movedInPractice = moveProductPracticeStage(productSequence, 4, 2, 2);
+  assert.equal(movedInPractice.stages[2], productSequence.stages[4]);
+  assert.equal(movedInPractice.stages[3], productSequence.stages[2]);
+  assert.deepEqual(getPracticeInstalledParts(movedInPractice, 2), getPracticeInstalledParts(productSequence, 2));
+  assert.equal(moveProductPracticeStage(productSequence, 4, 1, 2), null, 'Completed or engaged steps cannot be displaced');
+  assert.equal(moveProductPracticeStage(productSequence, 2, 0, 0), null, 'A fastener cannot come before any mounted part');
+  const dependent = { stages: [defaultSequence.stages[0], { ...defaultSequence.stages[1], support: defaultSequence.stages[0].target }] };
+  assert.equal(moveProductPracticeStage(dependent, 1, 0, 0), null, 'A part cannot be moved ahead of its mounting support');
+  const enclosureParts = [
+    ['Panel-7', [0, 0, 4], [10, 10, 6]], ['Housing', [0, 0, 0], [10, 10, 5]],
+    ['Board', [1, 1, 1], [8, 7, 2]], ['Connector', [2, 2, 2], [4, 3, 3]],
+    ['Internal bolt', [4, 4, 1], [5, 5, 4]], ['Lid bolt', [5, 5, 4], [6, 6, 6.1]],
+  ].map(([name, min, max], index) => ({ name, number: index + 1, shapeIds: ['shape-' + index], path: '', bounds: { min, max } }));
+  const leaf = (index) => ({ name: enclosureParts[index].name, meshes: [index], children: [] });
+  const housingModel = { ...fastenerModel, bounds: { min: [0, 0, 0], max: [10, 10, 6.1] },
+    manifest: { ...fastenerModel.manifest, shapeList: enclosureParts.map((part, index) => ({ id: part.shapeIds[0], meshIndex: index })) },
+    root: { name: 'Product', meshes: [], children: [leaf(0), leaf(1), { name: 'Board assembly', meshes: [], children: [leaf(2), leaf(3)] }, leaf(4), leaf(5)] } };
+  const nested = createProductPracticeSequence(housingModel, enclosureParts, createInstructionDrafts(enclosureParts));
+  const [duringFigure, afterFigure] = getPracticeCardImageRequests('step', [enclosureParts[2], enclosureParts[3]], [enclosureParts[1]]);
+  assert.deepEqual(Array.from(duringFigure.target.shapeIds), ['shape-2', 'shape-3']);
+  assert.deepEqual(Array.from(afterFigure.target.shapeIds), ['shape-1', 'shape-2', 'shape-3']);
+  assert.deepEqual(Array.from(afterFigure.target.highlightShapeIds), ['shape-2', 'shape-3']);
+  assert.deepEqual(Array.from(nested.stages, ({ target }) => target.partNumber), [3, 4, 2, 3, 5, 1, 6], 'Build the board first and close the lid after internal assembly');
+  assert.equal(nested.stages[3].kind, 'join');
+  assert.equal(nested.stages[5].closesEnclosure, true);
+  assert.equal(nested.stages[6].closesEnclosure, false, 'The lid screw follows closure without acting as a cover');
+  assert.deepEqual(Array.from(nested.stages[3].members), [3, 4]);
+  const boardArea = nested.stages[0].workArea.id;
+  assert.deepEqual(Array.from(getPracticeInstalledParts(nested, 3, boardArea)), [3, 4]);
+  assert.deepEqual(Array.from(getPracticeInstalledParts(nested, 3, null)), [2]);
+  assert.deepEqual(Array.from(getPracticeInstalledParts(nested, 4, boardArea)), []);
+  assert.deepEqual(Array.from(getPracticeInstalledParts(nested, 4, null)), [2, 3, 4]);
+  assert.equal(getPracticeInstalledParts(nested, nested.stages.length, null).length, 6, 'The completed product contains every physical part once');
+  assert.equal(moveProductPracticeStage(nested, 3, 1, 0), null, 'A subassembly must be built before it can be joined');
+  assert.equal(moveProductPracticeStage(nested, 5, 4, 0), null, 'Internal parts stay before the cover');
+  assert.equal(moveProductPracticeStage(nested, 6, 5, 0), null, 'Cover screws stay after the cover');
+  const flatModel = { ...housingModel, root: { ...housingModel.root, children: enclosureParts.map((_, index) => leaf(index)) } };
+  const flatInstructions = createInstructionDrafts(enclosureParts).map((step) => ({ ...step, isConfirmed: true,
+    section: [3, 4].includes(step.partNumber) ? '기판 소조립' : step.section }));
+  const flatSequence = createProductPracticeSequence(flatModel, enclosureParts, flatInstructions);
+  assert.deepEqual(Array.from(flatSequence.stages.find(({ kind }) => kind === 'join').members), [3, 4]);
+  assert.equal(flatSequence.stages.find(({ closesEnclosure }) => closesEnclosure).target.partNumber, 1);
+  fastenerGeometry.dispose();
   const drafts = createInstructionDrafts([
     { ...grouped[0], name: 'Torx bolt' }, { ...grouped[1], name: 'Torx bolt' }, { ...grouped[2], name: 'Wire' },
   ]);
@@ -112,6 +385,10 @@ async function checkModel() {
   const reordered = moveInstruction(instructions, '1', -1);
   assert.equal(reordered[0].id, '1');
   assert.equal(moveInstruction(reordered, '7', -1), reordered, 'A step cannot be reordered into a different section');
+  const dragged = reorderInstruction(instructions, '0', '4', true);
+  assert.deepEqual(Array.from(dragged.slice(0, 6), ({ id }) => id), ['1', '2', '3', '4', '0', '5']);
+  assert.deepEqual(Array.from(reorderInstruction(dragged, '0', '1', false), ({ id }) => id), instructions.map(({ id }) => id));
+  assert.equal(reorderInstruction(instructions, '0', '7', false), instructions, 'Dragging preserves the assembly section');
   const sheets = paginateInstructions(reordered);
   assert.equal(sheets.length, 2);
   assert.equal(sheets[0][0].steps.length, 6);
@@ -131,6 +408,37 @@ async function checkModel() {
     assert.equal(findShapeAtFace(built.rangeList, range.firstTriangle + range.triangleCount - 1), range.id);
   }
   assert.equal(findShapeAtFace(built.rangeList, 5040), null); built.geometry.dispose();
+  const cubeStructure = buildStepStructureGeometry(cube);
+  assert.equal(cubeStructure.geometry.getAttribute('position').count / 2, 12, 'Only the twelve cube edges are visible');
+  cubeStructure.geometry.dispose();
+  const cylinder = new CylinderGeometry(1, 1, 3, 48);
+  const cylinderStructure = createStepStructureEdges(cylinder);
+  const points = cylinderStructure.getAttribute('position');
+  const faceA = cylinderStructure.getAttribute('faceA'), faceB = cylinderStructure.getAttribute('faceB');
+  const sideLines = (view) => {
+    const visible = [];
+    const a = new Vector3(), b = new Vector3();
+    for (let index = 0; index < points.count; index += 2) {
+      if (Math.abs(points.getY(index) - points.getY(index + 1)) < 2) continue;
+      if (a.fromBufferAttribute(faceA, index).dot(view) * b.fromBufferAttribute(faceB, index).dot(view) <= 0) visible.push(index);
+    }
+    return visible;
+  };
+  const front = sideLines(new Vector3(1, 0, 0.24));
+  const rotated = sideLines(new Vector3(0.24, 0, 1));
+  assert.equal(front.length, 2, 'The round body shows two vertical silhouettes without tessellation lines');
+  assert.equal(rotated.length, 2);
+  assert.notDeepEqual(front, rotated, 'The silhouette follows the viewing angle');
+  cylinderStructure.dispose(); cylinder.dispose();
+  const assemblyStructure = buildStepStructureGeometry(assembly);
+  assert.deepEqual(Array.from(assemblyStructure.rangeList, (range) => range.id), Array.from(built.rangeList, (range) => range.id));
+  const assemblyNormals = assemblyStructure.geometry.getAttribute('faceA');
+  let fixedEdges = 0;
+  for (let index = 0; index < assemblyNormals.count; index += 2) {
+    if (assemblyNormals.getX(index) === 0 && assemblyNormals.getY(index) === 0 && assemblyNormals.getZ(index) === 0) fixedEdges++;
+  }
+  assert.ok(fixedEdges < 5040, 'The assembly has fewer always-visible structure segments than mesh triangles');
+  assemblyStructure.geometry.dispose();
   assert.equal(sameStepModel(assembly.manifest, { ...assembly.manifest, name: 'renamed.stp' }), true);
   assert.equal(sameStepModel(assembly.manifest, { ...assembly.manifest, sha256: '0'.repeat(64) }), false);
   const result = analyze(tableTokens());

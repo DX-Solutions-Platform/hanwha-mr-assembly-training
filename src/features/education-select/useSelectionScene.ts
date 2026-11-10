@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type Dispatch, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject } from 'react';
 import type { FlowAction, FlowState } from '@/features/training-flow/state/flowReducer';
 import type { ProcessElements } from '@/features/process-select/ProcessOverlay';
 import { loadReferenceThree } from './referenceThree';
@@ -15,31 +15,34 @@ interface SelectionSceneOptions {
   labelListRef: RefObject<(HTMLDivElement | null)[]>;
   productKey: string;
   dispatch: Dispatch<FlowAction>;
+  selectProduct: (index: number) => void;
   requestBack: () => void;
 }
 
-export function useSelectionScene({ canvasRef, currentRef, returningRef, elements, labelListRef, productKey, dispatch, requestBack }: SelectionSceneOptions) {
+export function useSelectionScene({ canvasRef, currentRef, returningRef, elements, labelListRef, productKey, dispatch, selectProduct, requestBack }: SelectionSceneOptions) {
   const [status, setStatus] = useState<SceneLoadStatus>('loading');
   const [attempt, setAttempt] = useState(0);
+  const shelf = useRef<ReturnType<typeof mountReferenceShelf> | null>(null);
+  const invalidate = useCallback(() => shelf.current?.invalidate(), []);
   const handleRetry = () => { setStatus('loading'); setAttempt((value) => value + 1); };
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let isMounted = true;
-    let dispose: (() => void) | undefined;
     const timeout = window.setTimeout(() => { if (isMounted) setStatus('error'); }, 20_000);
     const handleContextLost = (event: Event) => { event.preventDefault(); if (isMounted) setStatus('error'); };
     canvas.addEventListener('webglcontextlost', handleContextLost);
     const products: SelectionProduct[] = JSON.parse(productKey);
-    void loadReferenceThree().then((three) => {
+    const nuri = products.some(({ kind }) => kind === 'nuri') ? import('./nuriShelfModel') : undefined;
+    void Promise.all([loadReferenceThree(), nuri]).then(([three, nuriModel]) => {
       if (!isMounted) return;
       // 외부 글꼴을 기다리지 않고 사용 가능한 글꼴로 3D 모델을 초기화합니다.
-      dispose = mountReferenceShelf(three, canvas, products, {
+      shelf.current = mountReferenceShelf(three, canvas, products, {
         onReady: () => { window.clearTimeout(timeout); if (isMounted) setStatus('ready'); },
         getHoveredIndex: () => currentRef.current.hoveredIndex,
         onHover: (productIndex) => dispatch({ type: 'hoverProduct', productIndex }),
-        onSelect: (productIndex) => dispatch({ type: 'selectProduct', productIndex }),
+        onSelect: selectProduct,
         getState: () => ({ activeIndex: currentRef.current.phase === 'select' ? null : currentRef.current.activeIndex,
           selectedSection: currentRef.current.selectedSectionIndex, hoveredSection: currentRef.current.hoveredSectionIndex, isReturning: returningRef.current, isTransition: currentRef.current.phase === 'transition' || currentRef.current.phase === 'hud' }),
         onHoverSection: (sectionIndex) => dispatch({ type: 'hoverSection', sectionIndex }),
@@ -59,18 +62,20 @@ export function useSelectionScene({ canvasRef, currentRef, returningRef, element
         },
         onLabelPosition: (index, x, y) => {
           const label = labelListRef.current[index];
-          if (label) { label.style.left = `${x.toFixed(1)}px`; label.style.top = `${y.toFixed(1)}px`; }
+          const position = `${Math.round(x * 10) / 10}px ${Math.round(y * 10) / 10}px`;
+          if (label && label.style.translate !== position) label.style.translate = position;
         },
-      });
+      }, nuriModel?.buildNuriShelfModel);
     }).catch((error) => {
       window.clearTimeout(timeout);
       if (isMounted) { console.error(error); setStatus('error'); }
     });
     return () => {
       isMounted = false; window.clearTimeout(timeout);
-      canvas.removeEventListener('webglcontextlost', handleContextLost); dispose?.();
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      shelf.current?.dispose(); shelf.current = null;
     };
-  }, [attempt, canvasRef, currentRef, returningRef, elements, labelListRef, productKey, dispatch, requestBack]);
+  }, [attempt, canvasRef, currentRef, returningRef, elements, labelListRef, productKey, dispatch, selectProduct, requestBack]);
 
-  return { status, attempt, handleRetry };
+  return { status, attempt, handleRetry, invalidate };
 }

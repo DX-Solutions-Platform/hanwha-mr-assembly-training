@@ -13,5 +13,5 @@ export function TrainingEntryScreen({ initialStep = 0, initialView = 'intro' }: 
   }, []);
   return hasFinishedIntro
     ? <StartScreen onReplay={() => setHasFinishedIntro(false)} />
-    : <ProjectIntro initialStep={initialStep} onFinish={() => setHasFinishedIntro(true)} />;
+    : <ProjectIntro initialStep={initialStep} onSkip={() => setHasFinishedIntro(true)} />;
 }

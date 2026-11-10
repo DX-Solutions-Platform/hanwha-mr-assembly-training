@@ -13,6 +13,7 @@ interface SceneCanvasProps {
   frameloop?: CanvasProps['frameloop'];
   resize?: CanvasProps['resize'];
   orthographic?: boolean;
+  detailDpr?: number;
 }
 
 /**
@@ -20,10 +21,10 @@ interface SceneCanvasProps {
  * - 렌더 배율: 픽셀 예산(useRenderDpr) × 품질 단계(프레임 저하 시 자동 하향)
  * - 배경 투명(alpha) → 뒤의 HorizonBackdrop이 보임, 후처리 없음, 스텐실 끔
  */
-export function SceneCanvas({ children, camera, hasShadows = false, onPointerMissed, frameloop = 'always', resize, orthographic }: SceneCanvasProps) {
+export function SceneCanvas({ children, camera, hasShadows = false, onPointerMissed, frameloop = 'always', resize, orthographic, detailDpr }: SceneCanvasProps) {
   const baseDpr = useRenderDpr();
   const [qualityIndex, setQualityIndex] = useState(0);
-  const renderDpr = baseDpr * RENDER_QUALITY_STEP_LIST[qualityIndex];
+  const renderDpr = (detailDpr ?? baseDpr) * RENDER_QUALITY_STEP_LIST[qualityIndex];
   const lastIndex = RENDER_QUALITY_STEP_LIST.length - 1;
   return (
     <Canvas
@@ -34,7 +35,7 @@ export function SceneCanvas({ children, camera, hasShadows = false, onPointerMis
       resize={resize}
       orthographic={orthographic}
       onPointerMissed={onPointerMissed}
-      gl={{ antialias: renderDpr < 1.2, alpha: true, stencil: false, powerPreference: 'high-performance' }}
+      gl={{ antialias: detailDpr !== undefined || renderDpr < 1.2, alpha: true, stencil: false, powerPreference: 'high-performance' }}
       style={{ position: 'absolute', inset: 0 }}
     >
       <PerformanceMonitor

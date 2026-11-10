@@ -10,7 +10,7 @@ export function SelectionHeader({ isVisible, isProcess = false }: { isVisible: b
       <Title>교육 선택</Title>
       <Subtitle>조립할 제품을 선택하세요</Subtitle>
     </Header>
-    {isVisible && <Upload href="/training/upload" $isProcess={isProcess}>
+    {isVisible && <Upload href="/training/upload" prefetch={false} $isProcess={isProcess}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f37321" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 16V4" /><path d="m6 10 6-6 6 6" /><path d="M4 20h16" />
       </svg>

@@ -1,80 +1,102 @@
 'use client';
-import styled from 'styled-components';
-import { CutButton } from '@/components/common/CutButton';
-import { monoLabel } from '@/styles/mixins';
 
-/** 3D 장면과 분리된 시작 화면. 링크를 누를 때 교육 화면을 처음 불러옵니다. */
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import { trainingTools } from '@/components/common/TrainingToolNavigation';
+import { INTRO_OBJECT_PARTS, introObjectStyle, SPRITE_POSITION, STEP_ARTWORK_PARTS } from './introObjects';
+import * as S from './StartScreen.styles';
+
+const cards = [
+  { ...trainingTools.pdf, code: 'PDF / DRAWING', visual: 'upload', description: '도면에서 부품과 조립 정보를 확인합니다.' },
+  { ...trainingTools.step, code: 'STEP / ASSEMBLY', visual: 'step', description: '3D 조립품을 불러와 부품을 확인하고 실습을 구성합니다.' },
+  { ...trainingTools.edit, code: 'VR LESSON / EDIT', visual: 'report', description: '교육 ZIP을 열어 단계별 안내와 내용을 수정합니다.' },
+] as const;
+
 export function StartScreen({ onReplay }: { onReplay: () => void }) {
-  return (
-    <Root>
-      <Content>
-        <Brand>HANWHA · MR ASSEMBLY TRAINING</Brand>
-        <Mark aria-hidden="true">
-          <svg width="96" height="96" viewBox="0 0 96 96" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="m48 10 30 17-30 17-30-17 30-17Z" />
-            <path d="m18 39 30 17 30-17M18 51l30 17 30-17M18 63l30 17 30-17M48 44v36" />
-          </svg>
-        </Mark>
-        <Title>MR 조립 교육</Title>
-        <Description>제품을 선택하고, 공정별 조립 과정을 실습하세요.</Description>
-        <Steps aria-label="교육 진행 순서">제품 선택 <span aria-hidden="true">→</span> 공정 확인 <span aria-hidden="true">→</span> 조립 실습</Steps>
-        <StartLink as="a" href="/training">시작하기 <span aria-hidden="true">→</span></StartLink>
-        <Replay as="a" href="/part-library">부품 라이브러리 <span aria-hidden="true">→</span></Replay>
-        <Replay as="a" href="/" onClick={(event) => { event.preventDefault(); onReplay(); }}>프로젝트 안내 다시 보기</Replay>
-        <Device>PC · Meta Quest 3</Device>
-      </Content>
-    </Root>
-  );
-}
+  const [activeIndex, setActiveIndex] = useState(1);
+  const cardLinks = useRef<(HTMLAnchorElement | null)[]>([]);
+  const cardGroup = useRef<HTMLElement>(null);
 
-const Root = styled.main`
-  position: fixed; inset: 0; overflow: auto; display: grid; place-items: center;
-  padding: ${({ theme }) => theme.space[6]}px;
-  background: radial-gradient(ellipse at 50% 40%, ${({ theme }) => theme.color.bgCenter}, ${({ theme }) => theme.color.bgMid} 60%, ${({ theme }) => theme.color.bgEdge});
-  color: ${({ theme }) => theme.color.ink};
-`;
-const Content = styled.div`
-  width: 100%; max-width: ${({ theme }) => theme.stage.width / 3}px;
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  padding-block: ${({ theme }) => theme.space[7]}px;
-`;
-const Brand = styled.p`
-  ${monoLabel}; margin: 0; font-size: ${({ theme }) => theme.size.sm}px;
-  color: ${({ theme }) => theme.color.primary}; white-space: normal; line-height: 1.8;
-`;
-const Mark = styled.div`
-  margin: ${({ theme }) => theme.space[7]}px 0 ${({ theme }) => theme.space[5]}px;
-  color: ${({ theme }) => theme.color.primary};
-`;
-const Title = styled.h1`
-  margin: 0; font-size: ${({ theme }) => theme.size.display}px; line-height: 1.3;
-  font-weight: ${({ theme }) => theme.weight.bold};
-`;
-const Description = styled.p`
-  margin: ${({ theme }) => theme.space[5]}px 0 0;
-  font-size: ${({ theme }) => theme.size.base}px; line-height: 1.8; text-wrap: pretty;
-  color: ${({ theme }) => theme.color.inkSub};
-`;
-const Steps = styled.p`
-  display: flex; flex-wrap: wrap; justify-content: center; gap: ${({ theme }) => theme.space[3]}px;
-  margin: ${({ theme }) => theme.space[4]}px 0 ${({ theme }) => theme.space[7]}px;
-  font-size: ${({ theme }) => theme.size.md}px; color: ${({ theme }) => theme.color.inkMuted};
-  span { color: ${({ theme }) => theme.color.primaryLine}; }
-`;
-const StartLink = styled(CutButton)`
-  width: ${({ theme }) => theme.space[8] * 4}px; max-width: 100%;
-  height: ${({ theme }) => theme.space[8]}px; gap: ${({ theme }) => theme.space[5]}px;
-  text-decoration: none;
-  &:hover { color: ${({ theme }) => theme.color.onPrimary}; }
-  &:focus-visible { box-shadow: inset 0 0 0 ${({ theme }) => theme.space[1]}px ${({ theme }) => theme.color.ink}; }
-`;
-const Replay = styled.button`
-  margin-top: ${({ theme }) => theme.space[5]}px; padding: ${({ theme }) => theme.space[2]}px;
-  color: ${({ theme }) => theme.color.inkMuted}; font-size: ${({ theme }) => theme.size.md}px;
-  &:hover { color: ${({ theme }) => theme.color.primarySoft}; }
-  &:focus-visible { outline: 1px solid ${({ theme }) => theme.color.primarySoft}; }
-`;
-const Device = styled.p`
-  ${monoLabel}; margin: ${({ theme }) => theme.space[6]}px 0 0;
-  font-size: ${({ theme }) => theme.size.sm}px; color: ${({ theme }) => theme.color.inkDisabled};
-`;
+  useEffect(() => {
+    const group = cardGroup.current;
+    if (group && group.scrollWidth > group.clientWidth) {
+      cardLinks.current[1]?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      const control = event.target instanceof Element && event.target.closest('a, button, input, textarea, select, [contenteditable="true"]');
+      if (control && !cardGroup.current?.contains(control)) return;
+      if (event.key === 'Enter' && !control && !event.repeat) {
+        event.preventDefault();
+        cardLinks.current[activeIndex]?.click();
+      }
+      const direction = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+      if (!direction) return;
+      event.preventDefault();
+      const next = (activeIndex + direction + cards.length) % cards.length;
+      setActiveIndex(next);
+      cardLinks.current[next]?.focus();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeIndex]);
+
+  return <S.Root aria-labelledby="training-start-title">
+    <S.Shell>
+      <S.Header>
+        <div>
+          <S.Brand>HANWHA <span>· MR ASSEMBLY TRAINING</span></S.Brand>
+          <S.Title id="training-start-title">작업 모드 선택</S.Title>
+        </div>
+        <S.HeaderNote>PC · META QUEST 3</S.HeaderNote>
+      </S.Header>
+
+      <S.Cards ref={cardGroup} aria-label="작업 모드">
+        {cards.map(({ href, label, code, visual, description }, index) => {
+          const active = index === activeIndex;
+          const parts = visual === 'step' ? STEP_ARTWORK_PARTS : INTRO_OBJECT_PARTS[visual];
+          return <S.Card key={href} href={href} prefetch={false}
+            ref={(node) => { cardLinks.current[index] = node; }}
+            aria-labelledby={`training-mode-${index}`} aria-describedby={`training-mode-description-${index}`}
+            data-highlighted={active}
+            onFocus={() => setActiveIndex(index)}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'mouse' && !document.activeElement?.matches(':focus-visible')) setActiveIndex(index);
+            }}>
+            <S.CardLabel aria-hidden="true"><b>{String(index + 1).padStart(2, '0')}</b>{code}</S.CardLabel>
+            <S.Frame>
+              <S.Surface>
+                <S.Visual aria-hidden="true">
+                  <S.Artwork>
+                    {parts.map((part) => <S.ArtworkPart key={part.id} data-artwork-part={part.id}
+                      $position={visual === 'step' ? undefined : SPRITE_POSITION[visual]} style={introObjectStyle(part)} />)}
+                  </S.Artwork>
+                </S.Visual>
+                <S.CardCopy>
+                  <div>
+                    <S.CardTitle id={`training-mode-${index}`}>{label}</S.CardTitle>
+                    <S.Description id={`training-mode-description-${index}`}>{description}</S.Description>
+                  </div>
+                  <S.Arrow aria-hidden="true">→</S.Arrow>
+                </S.CardCopy>
+              </S.Surface>
+            </S.Frame>
+          </S.Card>;
+        })}
+      </S.Cards>
+
+      <S.Footer>
+        <S.Utility aria-label="추가 메뉴">
+          <Link href="/training/demo" prefetch={false}>교범 관리 <span aria-hidden="true">→</span></Link>
+          <Link href="/training" prefetch={false}>교육 실습 시작하기 <span aria-hidden="true">→</span></Link>
+          <Link href="/part-library" prefetch={false}>부품 라이브러리</Link>
+          <button type="button" onClick={onReplay}>프로젝트 안내 다시 보기</button>
+        </S.Utility>
+        <S.Keys aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> 이동 <kbd>ENTER</kbd> 선택</S.Keys>
+      </S.Footer>
+    </S.Shell>
+  </S.Root>;
+}

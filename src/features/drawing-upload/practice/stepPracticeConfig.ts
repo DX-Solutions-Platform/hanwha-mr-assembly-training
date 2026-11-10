@@ -1,36 +1,77 @@
-import type { StepBounds, StepPick, VectorTuple } from '@/features/drawing-upload-dev/model/stepTypes';
+import type { StepPick, VectorTuple } from '@/features/drawing-upload-dev/model/stepTypes';
 
 export interface PracticeTarget {
   partNumber: number;
   pick?: StepPick;
 }
 
-export interface PracticeDraft {
+export interface PracticeMountDraft {
   placement?: PracticeTarget;
+  support?: PracticeTarget;
+  purpose: string;
+}
+
+export interface PracticeDraft {
+  mounts: PracticeMountDraft[];
   fastening?: PracticeTarget;
   tool: string;
   torque: string;
   exampleTorque: boolean;
 }
 
-export type PracticeConfig = Omit<PracticeDraft, 'placement' | 'fastening'> & {
+export type PracticeMount = Omit<PracticeMountDraft, 'placement' | 'support'> & {
   placement: Required<PracticeTarget>;
+  support: Required<PracticeTarget>;
+};
+
+export type PracticeConfig = Omit<PracticeDraft, 'mounts' | 'fastening'> & {
+  mounts: [PracticeMount, ...PracticeMount[]];
   fastening: Required<PracticeTarget>;
 };
 
-const emptyDraft: PracticeDraft = { tool: '', torque: '', exampleTorque: false };
+const emptyDraft: PracticeDraft = { mounts: [{ purpose: '' }], tool: '', torque: '', exampleTorque: false };
+export const ATTACHMENT_POINT_TOLERANCE = 0.12;
 
 function isPoint(value: unknown): value is VectorTuple {
   return Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
 }
 
-export function isPracticeReady(draft: PracticeDraft, partCount: number): draft is PracticeConfig {
-  const isTarget = (target?: PracticeTarget) => !!target && Number.isInteger(target.partNumber) &&
+export function getPracticeTorque(value: unknown) {
+  const torque = typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value) : NaN;
+  return Number.isFinite(torque) && torque > 0 ? torque : null;
+}
+
+function isTarget(target: PracticeTarget | undefined, partCount: number): target is Required<PracticeTarget> {
+  return !!target && Number.isInteger(target.partNumber) &&
     target.partNumber >= 1 && target.partNumber <= partCount && isPoint(target.pick?.point) &&
     isPoint(target.pick?.normal) && Math.hypot(...target.pick.normal) > 0;
-  const torque = typeof draft.torque === 'string' && /^\d+(?:\.\d+)?$/.test(draft.torque.trim()) ? Number(draft.torque) : NaN;
-  return isTarget(draft.placement) && isTarget(draft.fastening) && draft.placement?.partNumber !== draft.fastening?.partNumber &&
-    typeof draft.tool === 'string' && !!draft.tool.trim() && Number.isFinite(torque) && torque > 0 && typeof draft.exampleTorque === 'boolean';
+}
+
+export function getAttachmentGap(placement?: PracticeTarget, support?: PracticeTarget) {
+  const first = placement?.pick?.point, second = support?.pick?.point;
+  if (!isPoint(first) || !isPoint(second)) return null;
+  return Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2]);
+}
+
+function hasSavedTools(draft: PracticeDraft, partCount: number) {
+  return isTarget(draft.fastening, partCount) &&
+    typeof draft.tool === 'string' && !!draft.tool.trim() && getPracticeTorque(draft.torque) !== null && typeof draft.exampleTorque === 'boolean';
+}
+
+export function isPracticeMountReady(mount: PracticeMountDraft, partCount: number): mount is PracticeMount {
+  const gap = getAttachmentGap(mount.placement, mount.support);
+  return isTarget(mount.placement, partCount) && isTarget(mount.support, partCount) && mount.placement.partNumber !== mount.support.partNumber &&
+    gap !== null && gap <= ATTACHMENT_POINT_TOLERANCE && typeof mount.purpose === 'string' && !!mount.purpose.trim();
+}
+
+export function isPracticeReady(draft: PracticeDraft, partCount: number): draft is PracticeConfig {
+  if (!hasSavedTools(draft, partCount) || !draft.mounts.length) return false;
+  const installed = new Set([draft.mounts[0].support?.partNumber]);
+  for (const mount of draft.mounts) {
+    if (!isPracticeMountReady(mount, partCount) || !installed.has(mount.support.partNumber) || installed.has(mount.placement.partNumber)) return false;
+    installed.add(mount.placement.partNumber);
+  }
+  return !installed.has(draft.fastening?.partNumber);
 }
 
 function storageKey(modelId: string) { return `step-practice-v1:${modelId}`; }
@@ -38,8 +79,15 @@ function storageKey(modelId: string) { return `step-practice-v1:${modelId}`; }
 export function readPracticeDraft(modelId: string, partCount: number): PracticeDraft {
   try {
     const saved = window.localStorage.getItem(storageKey(modelId));
-    const draft = saved && JSON.parse(saved) as PracticeDraft;
-    if (draft && isPracticeReady(draft, partCount)) return draft;
+    if (!saved) return emptyDraft;
+    const stored = JSON.parse(saved) as (PracticeDraft & PracticeMountDraft) | null;
+    if (!stored) return emptyDraft;
+    if (Array.isArray(stored.mounts)) return isPracticeReady(stored, partCount) ? stored : emptyDraft;
+    const migrated: PracticeDraft = {
+      mounts: [{ placement: stored.placement, support: stored.support, purpose: typeof stored.purpose === 'string' ? stored.purpose : '' }],
+      fastening: stored.fastening, tool: stored.tool, torque: stored.torque, exampleTorque: stored.exampleTorque,
+    };
+    if (hasSavedTools(migrated, partCount) && isTarget(stored.placement, partCount)) return migrated;
   } catch { /* Opening a practice is still possible if local storage is unavailable. */ }
   return emptyDraft;
 }
@@ -49,10 +97,4 @@ export function savePracticeConfig(modelId: string, config: PracticeConfig) {
     window.localStorage.setItem(storageKey(modelId), JSON.stringify(config));
     return true;
   } catch { return false; }
-}
-
-export function getPracticeFocus(modelBounds: StepBounds, partBounds: StepBounds, anchor: VectorTuple, scale: number): StepBounds {
-  const radius = Math.max(...partBounds.max.map((value, axis) => value - partBounds.min[axis]), 0.025 / scale) * 1.65;
-  const point = anchor.map((value, axis) => value / scale + (modelBounds.min[axis] + modelBounds.max[axis]) / 2);
-  return { min: point.map((value) => value - radius) as VectorTuple, max: point.map((value) => value + radius) as VectorTuple };
 }

@@ -1,11 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { BackButton } from '@/components/common/BackButton';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { Stage } from '@/components/common/Stage';
+import { TrainingToolNavigation } from '@/components/common/TrainingToolNavigation';
 import { StepLoadStatus, StepViewer } from '@/features/drawing-upload-dev/model/StepViewer';
 import { getStepAssemblyParts } from '@/features/drawing-upload-dev/model/stepAssemblyParts';
 import { STEP_FILE_ACCEPT, STEP_MAX_FILE_MB, type StepModel } from '@/features/drawing-upload-dev/model/stepTypes';
@@ -39,10 +39,9 @@ export function StepUploadScreen() {
         title="STEP 조립품 가져오기"
         subtitle="CATIA에서 내보낸 조립품을 열고, 3D에서 부품과 장착 위치를 확인하세요."
         action={
-          <Navigation>
-            <ActionButton as={Link} href="/training/upload-dev">PDF 도면 분석</ActionButton>
+          <TrainingToolNavigation active="step">
             <BackButton href="/training" label="교육 선택" />
-          </Navigation>
+          </TrainingToolNavigation>
         }
       />
       <Workspace $isDragging={isDragging}
@@ -81,7 +80,8 @@ function AssemblyWorkspace({ model, step, openFile }: {
   const [instructions, setInstructions] = useState(() => createInstructionDrafts(parts));
   const [instructionMode, setInstructionMode] = useState<InstructionMode | null>(null);
   const [practiceDraft, setPracticeDraft] = useState(() => readPracticeDraft(model.manifest.sha256, parts.length));
-  const hasPracticeDraft = isPracticeReady(practiceDraft, parts.length);
+  const hasPracticeDraft = practiceDraft.mounts.some((mount) => !!mount.placement?.pick) || !!practiceDraft.fastening?.pick;
+  const isPracticeConfigured = isPracticeReady(practiceDraft, parts.length);
   const confirmedCount = instructions.filter((instruction) => instruction.isConfirmed).length;
   const isDetailReady = instructions.length > 0 && confirmedCount === instructions.length;
   const selectedRow = useRef<HTMLButtonElement>(null);
@@ -131,7 +131,10 @@ function AssemblyWorkspace({ model, step, openFile }: {
         <ActionButton $primary onClick={() => setInstructionMode('drawing')}>교육용 도면 보기</ActionButton>
         <ActionButton disabled={!instructions.length} onClick={() => setInstructionMode('edit')}>작업 단계 등록</ActionButton>
         <ActionButton disabled={!isDetailReady} onClick={() => setInstructionMode('detail')}>조립 상세</ActionButton>
-        {hasPracticeDraft && <ActionButton onClick={() => setInstructionMode('practice')}>조립 실습</ActionButton>}
+        <ActionButton $primary disabled={parts.length < 2} onClick={() => setInstructionMode('product-practice')}>제품 전체 실습</ActionButton>
+        {hasPracticeDraft && parts.length >= 3 && <ActionButton onClick={() => setInstructionMode('practice')}>
+          {isPracticeConfigured ? '저장한 실습 설정' : '실습 설정 이어서'}
+        </ActionButton>}
       </InstructionActions>
     </InstructionBar>
     {instructionMode && <AssemblyInstructionsDialog
@@ -144,7 +147,6 @@ function AssemblyWorkspace({ model, step, openFile }: {
   );
 }
 
-const Navigation = styled.nav(({ theme }) => ({ display: 'flex', gap: theme.space[3] }));
 const Workspace = styled.main<{ $isDragging: boolean }>(({ theme, $isDragging }) => ({
   position: 'absolute', left: theme.space[8], right: theme.space[8], top: 208, bottom: theme.space[8],
   display: 'flex', flexDirection: 'column', gap: theme.space[3],

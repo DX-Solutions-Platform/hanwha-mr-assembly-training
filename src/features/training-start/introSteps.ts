@@ -41,9 +41,9 @@ export const INTRO_STEP_LIST: IntroStep[] = [
     visual: 'report',
   },
   {
-    label: '도면 · 교육 확장', code: 'EXPAND YOUR TRAINING', title: '도면에서\n새 교육을 추가하세요.',
-    description: '교육 선택 화면의 도면 업데이트에서 파일을 올리고, 분석 내용을 검토해 교육 목록에 추가할 수 있습니다.',
-    detailList: ['도면 문서·이미지·CAD·3D 모델 파일을 업로드할 수 있습니다.', '분석 결과의 부품과 조립 순서를 검토한 뒤 교육을 추가합니다.', '추가한 교육은 현재 브라우저 세션에서 이용할 수 있습니다.'],
+    label: '도면 · 교범 확장', code: 'EXPAND YOUR TRAINING', title: '도면에서\n새 교범을 추가하세요.',
+    description: '교범 관리에서 기존 조립 교범을 편집하고 3D 교범을 확인할 수 있습니다.',
+    detailList: ['교범 ZIP을 열어 단계별 동작과 작업 안내를 수정합니다.', 'STEP, PDF 또는 CAD 파일을 올려 3D 교범을 확인합니다.', '준비한 교범을 ZIP으로 내보냅니다.'],
     visual: 'upload',
   },
 ];

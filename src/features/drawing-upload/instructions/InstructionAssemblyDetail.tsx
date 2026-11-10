@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import type { StepAssemblyPart } from '@/features/drawing-upload-dev/model/stepAssemblyParts';
 import type { StepBounds, StepModel } from '@/features/drawing-upload-dev/model/stepTypes';
 import { StepPreviewBoundary } from '@/features/drawing-upload-dev/model/StepPreviewBoundary';
-import { ActionButton, Muted } from '@/features/drawing-upload-dev/ui/sharedStyles';
+import { ActionButton, Muted, ScrollArea } from '@/features/drawing-upload-dev/ui/sharedStyles';
 import { groupInstructions, type AssemblyInstruction } from './assemblyInstructions';
 import { getInstructionFigureRequests, InstructionAssemblyFigures } from './InstructionSheetPreview';
 import { useStepDrawings } from './useStepDrawings';
@@ -110,8 +110,8 @@ function DetailComparison({ model, stepId, part, base }: {
   return <InstructionAssemblyFigures stepId={stepId} part={part} base={base} images={images} />;
 }
 
-const DetailGrid = styled.div(({ theme }) => ({
-  display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(200px, 1fr)', overflow: 'auto', minHeight: 0,
+const DetailGrid = styled(ScrollArea)(({ theme }) => ({
+  display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(200px, 1fr)',
   gap: theme.space[4], padding: theme.space[4], alignItems: 'start',
   '@media (max-width: 720px)': { gridTemplateColumns: '1fr' },
 }));
@@ -129,7 +129,7 @@ const InstructionText = styled.div(({ theme }) => ({
   display: 'grid', gap: theme.space[1], borderTop: '1px solid ' + theme.color.primaryLineWeak, paddingTop: theme.space[3],
   '& p': { margin: 0, whiteSpace: 'pre-wrap' },
 }));
-const DetailList = styled.div(({ theme }) => ({ display: 'grid', gap: theme.space[2], maxHeight: '60vh', overflowY: 'auto' }));
+const DetailList = styled(ScrollArea)(({ theme }) => ({ display: 'grid', gap: theme.space[2], maxHeight: '60vh' }));
 const DetailChoice = styled.button(({ theme }) => ({
   textAlign: 'left', overflowWrap: 'anywhere', padding: theme.space[3], font: 'inherit', color: theme.color.ink,
   border: '1px solid ' + theme.color.primaryLineWeak, background: 'transparent', cursor: 'pointer',

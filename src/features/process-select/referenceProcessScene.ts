@@ -8,9 +8,9 @@ interface ProcessSession {
   index: number; startedAt: number; value: number; velocity: number; target: number;
   yaw: number; pitch: number; zoom: number; yawTarget: number; pitchTarget: number; zoomTarget: number; yawVelocity: number;
   pan: Three.Vector3; panTarget: Three.Vector3; center: Three.Vector3 | null; edges: ProcessEdges | null;
+  appearanceKey?: string;
 }
 
-/** seqGo/bootShelf의 실제 seqOn 분기. 모든 수식·상수는 원본 값입니다. */
 export class ReferenceProcessScene {
   private session: ProcessSession | null = null;
   private pointer: Three.Vector2;
@@ -20,7 +20,7 @@ export class ReferenceProcessScene {
   private wireframe = false;
   private flight: { startedAt: number; parts: { object: Three.Object3D; position: Three.Vector3; rotation: Three.Euler; offset: Three.Vector3; delay: number; spin: number }[] } | null = null;
 
-  constructor(private T: ReferenceThree, private canvas: HTMLCanvasElement, private camera: Three.PerspectiveCamera, private items: ProcessItem[], private positions: number[], private callbacks: ProcessCallbacks) {
+  constructor(private T: ReferenceThree, private canvas: HTMLCanvasElement, private camera: Three.PerspectiveCamera, private items: ProcessItem[], private positions: number[], private callbacks: ProcessCallbacks, private invalidate: () => void) {
     this.pointer = new T.Vector2(); this.ray = new T.Raycaster();
     canvas.addEventListener('wheel', this.onWheel, { capture: true, passive: false });
     canvas.addEventListener('pointerdown', this.onDown, true); canvas.addEventListener('click', this.onClick, true);
@@ -30,7 +30,7 @@ export class ReferenceProcessScene {
 
   synchronize(now: number) {
     const index = this.callbacks.getState().activeIndex;
-    if (this.session?.index === index) {
+    if ((this.session?.index ?? null) === index) {
       if (!this.callbacks.getState().isTransition) this.restoreFlight();
       return;
     }
@@ -44,6 +44,18 @@ export class ReferenceProcessScene {
 
   get isWireframe() { return !!this.session && !this.callbacks.getState().isReturning && this.wireframe; }
   get activeIndex() { return this.session?.index ?? null; }
+
+  isAnimating(now: number) {
+    const s = this.session;
+    if (!s) return false;
+    const returning = this.callbacks.getState().isReturning;
+    const item = this.items[s.index];
+    // 마지막 공정 라벨이 나타날 때까지 진입 애니메이션을 진행합니다.
+    return (!returning && now - s.startedAt < 3400) || Math.abs(s.value - (returning ? 0 : s.target)) > 0.001 ||
+      Math.abs(s.velocity) > 0.004 || item.tilt !== (returning ? 0 : 1) || (!this.drag.on && Math.abs(s.yawVelocity) > 0.0001) ||
+      Math.abs(s.yaw - s.yawTarget) > 0.0005 || Math.abs(s.pitch - s.pitchTarget) > 0.0005 ||
+      Math.abs(s.zoom - s.zoomTarget) > 0.0005 || s.pan.distanceToSquared(s.panTarget) > 0.000001;
+  }
 
   /** Demo 1.dc.html _trFlyOut: 현재 분해 위치를 기준으로 화면 밖으로 날립니다. */
   renderFlight(now: number) {
@@ -70,7 +82,7 @@ export class ReferenceProcessScene {
       part.object.position.copy(part.position).addScaledVector(part.offset, ease);
       part.object.rotation.x = part.spin * ease; part.object.rotation.z = part.spin * 0.6 * ease; part.object.visible = k < 1;
     });
-    return true;
+    return elapsed >= 1.2 ? 'complete' : 'moving';
   }
 
   private restoreFlight() {
@@ -114,7 +126,7 @@ export class ReferenceProcessScene {
     return true;
   }
 
-  afterFrame(now: number, dt: number) {
+  afterFrame(now: number) {
     const s = this.session;
     if (!s) return;
     const state = this.callbacks.getState(), elapsed = (now - s.startedAt) / 1000, item = this.items[s.index];
@@ -124,7 +136,12 @@ export class ReferenceProcessScene {
       if (hit) { let object: Three.Object3D | null = hit.object; while (object && object.userData.gi === undefined) object = object.parent; if (object) section = object.userData.gi; }
       if (section !== state.hoveredSection) this.callbacks.onHoverSection(section);
     }
-    s.edges = updateProcessAppearance(this.T, item, state, dt, this.isWireframe, s.edges);
+    const wireframe = this.isWireframe;
+    const appearanceKey = `${state.selectedSection}:${state.hoveredSection}:${state.isReturning}:${wireframe}`;
+    if (s.appearanceKey !== appearanceKey) {
+      s.edges = updateProcessAppearance(this.T, item, state, wireframe, s.edges);
+      s.appearanceKey = appearanceKey;
+    }
     if (elapsed > 2.4) updateProcessLabels(this.T, item, this.camera, state, elapsed, Math.max(0, Math.min(1.1, s.value)), this.callbacks);
   }
 
@@ -132,6 +149,7 @@ export class ReferenceProcessScene {
   private onWheel = (event: WheelEvent) => {
     if (!this.ready() || !this.session) return;
     event.preventDefault(); event.stopImmediatePropagation(); const s = this.session;
+    this.invalidate();
     if (event.ctrlKey || event.altKey) { s.zoomTarget = Math.max(0.45, Math.min(1.8, s.zoomTarget * (1 + Math.sign(event.deltaY) * 0.12))); return; }
     s.target = Math.max(0, Math.min(1, s.target - event.deltaY * 0.0012));
     if (s.target < 0.5 && this.callbacks.getState().selectedSection !== null) this.callbacks.onClearSection();
@@ -152,21 +170,24 @@ export class ReferenceProcessScene {
       else { const scale = 0.0075 * s.zoom; s.panTarget.x -= x * scale * Math.cos(s.yaw); s.panTarget.z += x * scale * Math.sin(s.yaw); s.panTarget.y += y * scale; }
     }
     this.canvas.style.cursor = this.drag.on ? 'grabbing' : this.callbacks.getState().hoveredSection !== null ? 'pointer' : 'grab';
+    this.invalidate();
   };
   private onUp = (event: PointerEvent) => {
     if (!this.ready() || this.callbacks.isPanelTarget(event.target)) return;
     event.stopImmediatePropagation(); const section = this.callbacks.getState().hoveredSection;
     if (this.drag.on && this.drag.button === 0 && this.drag.moved < 5 && section !== null) this.callbacks.onSelectSection(section);
     this.drag.on = false;
+    this.invalidate();
   };
   private onClick = (event: MouseEvent) => { if (this.ready()) event.stopImmediatePropagation(); };
   private onContext = (event: Event) => { if (this.session) event.preventDefault(); };
   private onKey = (event: KeyboardEvent) => {
     if (!this.session || this.callbacks.getState().isReturning || this.callbacks.getState().isTransition || /INPUT|TEXTAREA/.test(document.activeElement?.tagName ?? '')) return;
-    if (event.key === 'r' || event.key === 'R') this.wireframe = !this.wireframe;
+    if (event.key === 'r' || event.key === 'R') { this.wireframe = !this.wireframe; this.invalidate(); }
     if (!this.ready()) return;
     if (event.key === 'f' || event.key === 'F') {
       const s = this.session; s.yawTarget = 0; s.pitchTarget = 0; s.zoomTarget = 1; s.yawVelocity = 0; s.panTarget.set(0, 0, 0);
+      this.invalidate();
     }
     if (event.key === 'Escape') { if (this.callbacks.getState().selectedSection !== null) this.callbacks.onClearSection(); else this.callbacks.onBack(); }
   };

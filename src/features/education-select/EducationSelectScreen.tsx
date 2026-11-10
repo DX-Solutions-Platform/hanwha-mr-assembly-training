@@ -1,8 +1,11 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import styled from 'styled-components';
 import { useRouter } from 'next/navigation';
 import { Stage } from '@/components/common/Stage';
+import { NURI_MANUAL_HREF, useRegisteredNuriManual } from '@/store/demoManualRegistration';
 import type { Product } from '@/types/training';
 import { SelectionBackdrop } from './SelectionBackdrop';
 import { SelectionHeader } from './SelectionHeader';
@@ -11,8 +14,10 @@ import { useSelectionScene } from './useSelectionScene';
 import { SceneLoadNotice } from './SceneLoadNotice';
 import type { FlowState, FlowAction } from '@/features/training-flow/state/flowReducer';
 import { ProcessOverlay, type ProcessElements } from '@/features/process-select/ProcessOverlay';
-import { TrainingPreparation } from '@/features/training-preparation/TrainingPreparation';
 import type { HudController } from '@/features/hud/useHudController';
+
+const TrainingPreparation = dynamic(() => import('@/features/training-preparation/TrainingPreparation')
+  .then((module) => module.TrainingPreparation), { ssr: false });
 
 interface EducationSelectProps {
   productList: Product[];
@@ -32,16 +37,24 @@ export function EducationSelectScreen({ productList, flowState, dispatch, hudCon
   const returnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const returningRef = useRef(false);
   const [isReturning, setIsReturning] = useState(false);
-  const selectionList = getSelectionProducts(productList);
+  const nuriRegistered = useRegisteredNuriManual();
+  const selectionList = getSelectionProducts(productList, nuriRegistered);
+  const nuriIndex = nuriRegistered ? selectionList.length - 1 : -1;
   const productKey = JSON.stringify(selectionList);
   const labelWidth = Math.min(460, Math.floor(1760 / Math.max(1, selectionList.length))) - 40;
   const isProcess = flowState.phase !== 'select', { hoveredIndex, activeIndex, selectedSectionIndex } = flowState;
   const activeProduct = activeIndex !== null ? selectionList[activeIndex] : null;
   const isTransition = flowState.phase === 'transition' || flowState.phase === 'hud';
+  const selectProduct = useCallback((productIndex: number) => {
+    if (productIndex === nuriIndex) router.push(NURI_MANUAL_HREF);
+    else dispatch({ type: 'selectProduct', productIndex });
+  }, [dispatch, nuriIndex, router]);
   const onHorizon = useCallback((y: number, elapsed: number) => {
     const background = backgroundRef.current; if (!background) return;
-    background.style.setProperty('--preparation-horizon', `${y}px`);
-    background.style.setProperty('--preparation-floor-transition', elapsed < 1.8 ? 'top 1.5s cubic-bezier(.45,0,.2,1)' : elapsed < 2.4 ? 'top .5s ease' : 'top 0s');
+    const position = `${Math.round(y)}px`;
+    const transition = elapsed < 1.8 ? 'transform 1.5s cubic-bezier(.45,0,.2,1)' : elapsed < 2.4 ? 'transform .5s ease' : 'none';
+    if (background.style.getPropertyValue('--preparation-horizon') !== position) background.style.setProperty('--preparation-horizon', position);
+    if (background.style.getPropertyValue('--preparation-floor-transition') !== transition) background.style.setProperty('--preparation-floor-transition', transition);
   }, []);
   const requestBack = useCallback(() => {
     if (returningRef.current) return;
@@ -59,7 +72,9 @@ export function EducationSelectScreen({ productList, flowState, dispatch, hudCon
     return () => { layer.style.overflow = previous; layer.scrollTop = 0; layer.scrollLeft = 0; };
   }, []);
   useEffect(() => () => { if (returnTimerRef.current) clearTimeout(returnTimerRef.current); }, []);
-  const scene = useSelectionScene({ canvasRef, currentRef, returningRef, elements, labelListRef, productKey, dispatch, requestBack });
+  const scene = useSelectionScene({ canvasRef, currentRef, returningRef, elements, labelListRef, productKey, dispatch, selectProduct, requestBack });
+  const invalidate = scene.invalidate;
+  useEffect(() => { invalidate(); }, [flowState, isReturning, invalidate]);
   const isVisible = scene.status === 'ready';
 
   return <Stage background={<SelectionBackdrop isProcess={isProcess} isFlat={isTransition} onElement={(element) => { backgroundRef.current = element; }} />} scene={<Canvas key={scene.attempt} ref={canvasRef} $isVisible={isVisible} width={1920} height={1080} data-selection-canvas />}>
@@ -70,10 +85,11 @@ export function EducationSelectScreen({ productList, flowState, dispatch, hudCon
         <Code $isCustom={product.isCustom}>{product.code}</Code>
         <Name style={{ maxWidth: labelWidth }}>{product.name}</Name>
         <Meta $isLive={product.isLive}>{product.meta}</Meta>
+        {product.kind === 'nuri' && isVisible && !isProcess && <ManualLink href={NURI_MANUAL_HREF} prefetch={false}>교범 열기 →</ManualLink>}
         <Underline $isHovered={hoveredIndex === index} />
       </Label>)}
     </LabelLayer>
-    {isProcess && activeProduct && <ProcessOverlay kind={activeProduct.kind} selectedIndex={selectedSectionIndex} isReturning={isReturning} isDeparting={isTransition}
+    {isProcess && activeProduct && activeProduct.kind !== 'nuri' && <ProcessOverlay kind={activeProduct.kind} selectedIndex={selectedSectionIndex} isReturning={isReturning} isDeparting={isTransition}
       onLabelElement={(index, element) => { elements.current.labels[index] = element; }} onLineElement={(index, element) => { elements.current.lines[index] = element; }}
       onBackElement={(element) => { elements.current.back = element; }} onPanelElement={(element) => { elements.current.panel = element; }}
       onHover={(sectionIndex) => dispatch({ type: 'hoverSection', sectionIndex })} onSelect={(sectionIndex) => dispatch({ type: 'selectSection', sectionIndex })}
@@ -102,6 +118,10 @@ const Name = styled.span`
 `;
 const Meta = styled.span<{ $isLive: boolean }>`
   white-space: nowrap; font: 400 15px/1 'NexonLv2Gothic'; color: ${({ $isLive }) => $isLive ? '#e6eaec' : '#b4bcc0'};
+`;
+const ManualLink = styled(Link)`
+  pointer-events: auto; color: ${({ theme }) => theme.color.primarySoft};
+  &:hover, &:focus-visible { text-decoration: underline; }
 `;
 const Underline = styled.div<{ $isHovered: boolean }>`
   width: ${({ $isHovered }) => $isHovered ? 120 : 36}px; height: 2px; margin-top: 6px; background: #f37321;

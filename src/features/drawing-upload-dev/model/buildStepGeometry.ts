@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry, Color } from 'three';
 import { modelScale } from './stepModel';
+import { createStepStructureEdges } from './stepStructureEdges';
 import type { StepModel } from './stepTypes';
 
 export interface ShapeRange { id: string; firstTriangle: number; triangleCount: number; firstVertex: number; vertexCount: number; }
@@ -31,6 +32,40 @@ export function buildStepGeometry(model: StepModel, fallbackColor: string) {
   geometry.computeBoundingBox(); geometry.computeBoundingSphere();
   return { geometry, baseColors: colors, rangeList };
 }
+
+export function buildStepStructureGeometry(model: StepModel) {
+  const scale = modelScale(model.bounds);
+  const center = model.bounds.min.map((value, axis) => value + (model.bounds.max[axis] - value) / 2);
+  let vertexCount = 0;
+  const ranges = model.manifest.shapeList.map((shape) => {
+    const body = model.meshList[shape.meshIndex];
+    const source = new BufferGeometry().setAttribute('position', new BufferAttribute(body.position, 3))
+      .setIndex(new BufferAttribute(body.index, 1));
+    const edges = createStepStructureEdges(source);
+    const range = { id: shape.id, firstVertex: vertexCount, vertexCount: edges.getAttribute('position').count };
+    vertexCount += range.vertexCount;
+    for (const attribute of ['position', 'edgeMidpoint']) {
+      const { array } = edges.getAttribute(attribute);
+      for (let index = 0; index < array.length; index++) {
+        const axis = index % 3;
+        array[index] = (array[index] + (body.origin[axis] - center[axis])) * scale;
+      }
+    }
+    source.dispose();
+    return { range, edges };
+  });
+  const geometry = new BufferGeometry().setAttribute('color', new BufferAttribute(new Float32Array(vertexCount * 3), 3));
+  for (const attribute of ['position', 'edgeMidpoint', 'faceA', 'faceB']) {
+    const values = new Float32Array(vertexCount * 3);
+    for (const { range, edges } of ranges) {
+      values.set(edges.getAttribute(attribute).array, range.firstVertex * 3);
+    }
+    geometry.setAttribute(attribute, new BufferAttribute(values, 3));
+  }
+  for (const { edges } of ranges) edges.dispose();
+  return { geometry, rangeList: ranges.map(({ range }) => range) };
+}
+
 export function findShapeAtFace(rangeList: ShapeRange[], faceIndex: number) {
   return rangeList.find((range) => faceIndex >= range.firstTriangle && faceIndex < range.firstTriangle + range.triangleCount)?.id ?? null;
 }

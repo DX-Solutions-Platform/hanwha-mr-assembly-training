@@ -2,7 +2,7 @@ import {
   BufferAttribute, BufferGeometry, DoubleSide, EdgesGeometry, Group, LineBasicMaterial,
   LineSegments, Mesh, MeshBasicMaterial, OrthographicCamera, Scene, Vector3, WebGLRenderer, type Object3D,
 } from 'three';
-import type { StepBounds, StepModel } from '@/features/drawing-upload-dev/model/stepTypes';
+import type { StepBounds, StepMesh, StepShape, VectorTuple } from '@/features/drawing-upload-dev/model/stepTypes';
 
 const WIDTH = 448;
 const HEIGHT = 300;
@@ -13,7 +13,13 @@ export interface DrawingTarget {
   bounds: StepBounds;
   shapeIds?: readonly string[];
   highlightShapeIds?: readonly string[];
+  guide?: { from: VectorTuple; to: VectorTuple };
+  marks?: readonly VectorTuple[];
 }
+export type DrawingMeshModel = {
+  manifest: { shapeList: readonly Pick<StepShape, 'id' | 'meshIndex'>[] };
+  meshList: readonly Pick<StepMesh, 'position' | 'index' | 'origin'>[];
+};
 
 function fitCamera(camera: OrthographicCamera, bounds: StepBounds, scale: number) {
   const half = bounds.max.map((value, axis) => (value - bounds.min[axis]) * scale / 2);
@@ -38,7 +44,33 @@ function fitCamera(camera: OrthographicCamera, bounds: StepBounds, scale: number
   camera.updateProjectionMatrix();
 }
 
-export function createPartDrawingRenderer(resolution = 1) {
+function croppedFigure(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, padding: number) {
+  const { width, height } = canvas;
+  const pixels = context.getImageData(0, 0, width, height).data;
+  let left = width, right = -1, top = height, bottom = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixel = (y * width + x) * 4;
+      if (pixels[pixel] >= 252 && pixels[pixel + 1] >= 252 && pixels[pixel + 2] >= 252) continue;
+      left = Math.min(x, left);
+      right = Math.max(x, right);
+      top = Math.min(y, top);
+      bottom = Math.max(y, bottom);
+    }
+  }
+  if (right < left) return canvas.toDataURL('image/png');
+  left = Math.max(0, left - padding);
+  top = Math.max(0, top - padding);
+  right = Math.min(width - 1, right + padding);
+  bottom = Math.min(height - 1, bottom + padding);
+  const crop = document.createElement('canvas');
+  crop.width = right - left + 1;
+  crop.height = bottom - top + 1;
+  crop.getContext('2d')?.drawImage(canvas, left, top, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  return crop.toDataURL('image/png');
+}
+
+export function createPartDrawingRenderer(resolution = 1, up: 'y' | 'z' = 'z') {
   const width = WIDTH * resolution;
   const height = HEIGHT * resolution;
   const output = document.createElement('canvas');
@@ -58,8 +90,10 @@ export function createPartDrawingRenderer(resolution = 1) {
 
   const scene = new Scene();
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
-  camera.up.set(0, 0, 1);
-  camera.position.set(1, -1, 1).normalize().multiplyScalar(4);
+  camera.up.set(0, up === 'y' ? 1 : 0, up === 'y' ? 0 : 1);
+  if (up === 'y') camera.position.set(1.25, .83, 1.5);
+  else camera.position.set(1, -1, 1);
+  camera.position.normalize().multiplyScalar(4);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld();
   const surface = new MeshBasicMaterial({
@@ -83,7 +117,7 @@ export function createPartDrawingRenderer(resolution = 1) {
     targetContext.drawImage(renderer.domElement, 0, 0);
   }
 
-  function draw(model: StepModel, target: DrawingTarget) {
+  function draw(model: DrawingMeshModel, target: DrawingTarget) {
     const selected = target.shapeIds ? new Set(target.shapeIds) : null;
     const highlighted = new Set(target.highlightShapeIds);
     const locationMeshes = new Set<Object3D>();
@@ -130,7 +164,42 @@ export function createPartDrawingRenderer(resolution = 1) {
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, width, height);
       context.globalCompositeOperation = 'source-over';
-      return output.toDataURL('image/png');
+      if (target.guide || target.marks?.length) {
+        const map = (point: VectorTuple) => {
+          const projected = new Vector3(...point).sub(new Vector3(...center)).multiplyScalar(scale).project(camera);
+          return [(projected.x + 1) * width / 2, (1 - projected.y) * height / 2] as const;
+        };
+        context.save();
+        context.strokeStyle = LOCATION_COLOR;
+        context.fillStyle = LOCATION_COLOR;
+        context.lineWidth = 2 * resolution;
+        if (target.guide) {
+          const [x, y] = map(target.guide.from), [toX, toY] = map(target.guide.to);
+          const angle = Math.atan2(toY - y, toX - x);
+          context.setLineDash([5 * resolution, 3 * resolution]);
+          context.beginPath();
+          context.moveTo(x, y);
+          context.lineTo(toX, toY);
+          context.stroke();
+          context.setLineDash([]);
+          context.beginPath();
+          context.moveTo(toX, toY);
+          for (const side of [-1, 1]) {
+            const offset = angle + Math.PI + side * .42;
+            context.lineTo(toX + Math.cos(offset) * 10 * resolution, toY + Math.sin(offset) * 10 * resolution);
+          }
+          context.closePath();
+          context.fill();
+        }
+        for (const mark of target.marks ?? []) {
+          const [x, y] = map(mark);
+          context.beginPath();
+          context.arc(x, y, 4 * resolution, 0, Math.PI * 2);
+          context.stroke();
+        }
+        context.restore();
+      }
+      return up === 'y' ? croppedFigure(output, context, 10 * resolution) : output.toDataURL('image/png');
     } finally {
       scene.remove(group);
       geometries.forEach((geometry) => geometry.dispose());

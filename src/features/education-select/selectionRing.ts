@@ -1,10 +1,42 @@
-import type * as Three from 'three';
 import type { ReferenceThree, ReferenceTexture } from './referenceThree';
 import type { SelectionProduct } from './selectionProducts';
 
-/** Demo 1.dc.html 367행의 캔버스 링. 색·굵기·호·눈금·글자 값 원문. */
-export function createSelectionRing(T: ReferenceThree, holder: Three.Group, product: SelectionProduct, fontFamily: string) {
-  const kd: [string, number] = [product.isCustom ? 'NEW' : product.code, product.cardCount];
-  const mkTex = (draw: (context: CanvasRenderingContext2D) => void) => { const cvs = document.createElement('canvas'); cvs.width = cvs.height = 1024; const x = cvs.getContext('2d')!; x.translate(512, 512); draw(x); const tx = new T.CanvasTexture(cvs) as ReferenceTexture; tx.anisotropy = 4; tx.encoding = T.sRGBEncoding; return tx; }; const OR = '#f37321', PALE = '#ffd9bd'; const txMain = mkTex(x => { x.lineCap = 'butt'; x.strokeStyle = PALE; x.lineWidth = 46; x.beginPath(); x.arc(0, 0, 370, -Math.PI * 0.42, Math.PI * 1.36); x.stroke(); x.strokeStyle = OR; x.lineWidth = 46; x.beginPath(); x.arc(0, 0, 370, Math.PI * 1.36 + 0.06, Math.PI * 1.36 + 0.06 + Math.max(0.12, (Math.PI * 0.22 - 0.12) * 0.4)); x.stroke(); x.strokeStyle = PALE; x.lineWidth = 3; x.beginPath(); x.arc(0, 0, 330, 0, Math.PI * 2); x.stroke(); }); const txOuter = mkTex(x => { x.strokeStyle = PALE; x.lineWidth = 5; x.beginPath(); x.arc(0, 0, 445, -Math.PI * 0.95, -Math.PI * 0.05); x.stroke(); x.fillStyle = PALE; x.font = `500 30px ${fontFamily}`; const txt = ('HANWHA · ' + kd[0] + ' · ' + kd[1] + ' CARDS').split(''); let a = -Math.PI * 0.86; txt.forEach(ch => { x.save(); x.rotate(a + Math.PI / 2); x.fillText(ch, -8, -470); x.restore(); a += 0.034; }); x.strokeStyle = OR; x.lineWidth = 20; x.beginPath(); x.arc(0, 0, 445, Math.PI * 0.08, Math.PI * 0.32); x.stroke(); }); const flM = (tx: Three.Texture) => new T.MeshBasicMaterial({ map: tx, transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending, opacity: 0.85 }); const fl = new T.Group(); fl.scale.setScalar(0.63); holder.add(fl); const flMain = new T.Mesh(new T.PlaneGeometry(1.5, 1.5), flM(txMain)); flMain.rotation.x = -Math.PI / 2; fl.add(flMain); const flOut = new T.Mesh(new T.PlaneGeometry(1.5, 1.5), flM(txOuter)); flOut.rotation.x = -Math.PI / 2; flOut.position.y = 0.001; fl.add(flOut); const flShM = new T.MeshBasicMaterial({ color: 0xf37321, transparent: true, opacity: 0.08, depthWrite: false, blending: T.AdditiveBlending }); const flSh = new T.Mesh(new T.RingGeometry(0.4 * 0.63, 0.62 * 0.63, 96), flShM); flSh.rotation.x = -Math.PI / 2; flSh.position.y = 0.002; holder.add(flSh); const hScanM = new T.MeshBasicMaterial({ color: 0xffb07a, transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending }); const hScan = new T.Mesh(new T.RingGeometry(0.44 * 0.63, 0.47 * 0.63, 96), hScanM); hScan.rotation.x = -Math.PI / 2; holder.add(hScan); const fx = { fl, flMain, flOut, flSh, flShM, hScan, hScanM };
-  return fx;
+export function createSelectionRing(T: ReferenceThree, product: SelectionProduct, fontFamily: string) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 512;
+  const context = canvas.getContext('2d')!;
+  context.translate(256, 256);
+  context.scale(0.5, 0.5);
+
+  const pale = '#ffd9bd', orange = '#f37321';
+  function arc(radius: number, start: number, end: number, color: string, width: number) {
+    context.strokeStyle = color;
+    context.lineWidth = width;
+    context.beginPath();
+    context.arc(0, 0, radius, start, end);
+    context.stroke();
+  }
+  arc(370, -Math.PI * 0.42, Math.PI * 1.36, pale, 46);
+  arc(370, Math.PI * 1.36 + 0.06, Math.PI * 1.36 + 0.28, orange, 46);
+  arc(330, 0, Math.PI * 2, pale, 3);
+  arc(445, -Math.PI * 0.95, -Math.PI * 0.05, pale, 5);
+  arc(445, Math.PI * 0.08, Math.PI * 0.32, orange, 20);
+
+  context.fillStyle = pale;
+  context.font = `500 30px ${fontFamily}`;
+  const caption = product.kind === 'nuri' ? 'KSLV-II · 3D MANUAL'
+    : `HANWHA · ${product.isCustom ? 'NEW' : product.code} · ${product.cardCount} CARDS`;
+  Array.from(caption).forEach((character, index) => {
+    context.save();
+    context.rotate(-Math.PI * 0.36 + index * 0.034);
+    context.fillText(character, -8, -470);
+    context.restore();
+  });
+  const texture = new T.CanvasTexture(canvas) as ReferenceTexture;
+  texture.encoding = T.sRGBEncoding;
+  const material = new T.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, blending: T.AdditiveBlending });
+  const ring = new T.Mesh(new T.PlaneGeometry(0.945, 0.945), material);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.035;
+  return ring;
 }

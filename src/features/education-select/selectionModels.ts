@@ -4,7 +4,6 @@ import type { SelectionKind } from './selectionProducts';
 
 /** Demo 1.dc.html 330~357행. 도형·재질·좌표 원문, TypeScript 타입만 추가. */
 export function createSelectionModels(T: ReferenceThree) {
-  const droneProps: Three.Mesh[] = [];
     const M = (color: Three.ColorRepresentation, metal = 0.2, rough = 0.6) => new T.MeshStandardMaterial({ color, metalness: metal, roughness: rough });
     const add = (g: Three.Group, geo: Three.BufferGeometry, m: Three.Material, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) => { const o = new T.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
     const box = (w: number, h: number, d: number) => new T.BoxGeometry(w, h, d), cyl = (a: number, h: number, n = 32) => new T.CylinderGeometry(a, a, h, n);
@@ -27,11 +26,11 @@ export function createSelectionModels(T: ReferenceThree) {
         [-0.15, 0.15].forEach(z => add(g, box(0.02, 0.04, 0.08), lamp, 0.505, 0.2, z)); },
       drone: g => { const shell = M(0x2a2d31, 0.4, 0.4), arm = M(0x5d6670, 0.6, 0.35), motor = M(0xc9d1d8, 0.9, 0.25), prop = new T.MeshStandardMaterial({ color: 0xe6eaec, transparent: true, opacity: 0.35, roughness: 0.3 }), acc = M(0xf37321, 0.3, 0.5);
         add(g, box(0.26, 0.08, 0.26), shell, 0, 0.18, 0); add(g, box(0.1, 0.06, 0.08), shell, 0.16, 0.13, 0); add(g, new T.SphereGeometry(0.035, 16, 12), M(0x0d1013, 0.2, 0.1), 0.2, 0.12, 0);
-        droneProps.length = 0; for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4, x = Math.cos(a) * 0.36, z = Math.sin(a) * 0.36; add(g, box(0.36, 0.025, 0.04), arm, x / 2, 0.19, z / 2, 0, -a, 0); add(g, cyl(0.035, 0.06, 16), motor, x, 0.22, z); add(g, cyl(0.03, 0.01, 16), acc, x, 0.255, z); const p = add(g, cyl(0.15, 0.004, 32), prop, x, 0.265, z); droneProps.push(p); }
+        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4, x = Math.cos(a) * 0.36, z = Math.sin(a) * 0.36; add(g, box(0.36, 0.025, 0.04), arm, x / 2, 0.19, z / 2, 0, -a, 0); add(g, cyl(0.035, 0.06, 16), motor, x, 0.22, z); add(g, cyl(0.03, 0.01, 16), acc, x, 0.255, z); add(g, cyl(0.15, 0.004, 32), prop, x, 0.265, z); }
         [-1, 1].forEach(s => { add(g, box(0.02, 0.12, 0.02), arm, -0.06, 0.08, s * 0.1); add(g, box(0.02, 0.02, 0.3), arm, -0.06, 0.02, 0, 0, Math.PI / 2, 0); }); },
       stool: g => { const wood = M(0xdcc39a, 0, 0.75), woodD = M(0xc9ad80, 0, 0.8), steel = M(0xc9d1d8, 0.9, 0.25);
         [-0.2, 0.2].forEach(x => { add(g, box(0.035, 0.5, 0.045), wood, x, 0.25, -0.16, 0.06); add(g, box(0.035, 0.5, 0.045), wood, x, 0.25, 0.16, -0.06); add(g, box(0.03, 0.06, 0.34), woodD, x, 0.45, 0); add(g, box(0.03, 0.05, 0.38), woodD, x, 0.2, 0); });
         add(g, box(0.4, 0.04, 0.02), steel, 0, 0.45, -0.15); add(g, box(0.4, 0.022, 0.2), wood, 0, 0.23, 0.2); add(g, box(0.43, 0.024, 0.36), wood, 0, 0.51, 0); add(g, box(0.12, 0.026, 0.03), M(0x3a2e22, 0, 1), 0, 0.511, 0); }
     };
-  return { build, droneProps };
+  return build;
 }

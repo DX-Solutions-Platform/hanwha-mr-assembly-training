@@ -92,10 +92,14 @@ async function checkEntry() {
     const entryHtml = (await entry.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
     assert.ok(entryHtml.includes(titleList[index]), `Step ${index + 1} must render without React hydration`);
     assert.equal((entryHtml.match(/data-intro-part=/g) ?? []).length, partCountList[index]);
-    if (index === 5) assert.match(entryHtml, /href="\/training"/);
+    if (index === 5) assert.match(entryHtml, /<a[^>]*href="\/training\/demo"[^>]*>확인/);
   }
   const start = await fetch(new URL('/?view=start', baseUrl));
-  assert.match((await start.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''), /시작하기/);
+  const startHtml = (await start.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+  assert.match(startHtml, /작업 모드 선택/);
+  for (const route of ['/training/upload', '/training/upload-dev', '/training/edit']) {
+    assert.ok(startHtml.includes(`href="${route}"`), `Work mode ${route} must be reachable from the start screen`);
+  }
   console.log('PASS entry: server-rendered tutorial, skip, deferred 3D and mobile guide');
 }
 

@@ -1,11 +1,12 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useRef, type MouseEvent } from 'react';
 import { INTRO_STEP_LIST } from './introSteps';
 import { IntroPreview } from './IntroPreview';
 import { useIntroNavigation } from './useIntroNavigation';
 import * as S from './ProjectIntro.styles';
 
-export function ProjectIntro({ initialStep = 0, onFinish }: { initialStep?: number; onFinish: () => void }) {
+export function ProjectIntro({ initialStep = 0, onSkip }: { initialStep?: number; onSkip: () => void }) {
   const navigation = useIntroNavigation(initialStep);
   const stepIndex = navigation.index;
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -15,6 +16,10 @@ export function ProjectIntro({ initialStep = 0, onFinish }: { initialStep?: numb
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault(); navigation.move(delta);
   };
+  const skip = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault(); onSkip();
+  };
 
   useEffect(() => { headingRef.current?.focus({ preventScroll: true }); }, [stepIndex]);
 
@@ -23,7 +28,7 @@ export function ProjectIntro({ initialStep = 0, onFinish }: { initialStep?: numb
       <S.Shell>
         <S.Header>
           <S.Brand>HANWHA <span>/ MR ASSEMBLY TRAINING</span></S.Brand>
-          <S.Skip as="a" href="/?view=start" data-intro-action="skip" onClick={(event: MouseEvent<HTMLAnchorElement>) => { event.preventDefault(); onFinish(); }}>건너뛰기 <kbd>ESC</kbd></S.Skip>
+          <S.Skip as="a" href="/?view=start" data-intro-action="skip" onClick={skip}>건너뛰기 <kbd>ESC</kbd></S.Skip>
         </S.Header>
         <S.Main key={step.code} $phase={navigation.phase} $direction={navigation.direction} data-intro-phase={navigation.phase}>
           <S.Copy>
@@ -37,11 +42,11 @@ export function ProjectIntro({ initialStep = 0, onFinish }: { initialStep?: numb
         </S.Main>
         <S.Footer>
           <S.Navigation>
-            <S.KeyboardHint><kbd>{isLastStep ? 'ENTER' : '→'}</kbd> {isLastStep ? '확인 후 입장' : '다음 안내'} <span>·</span> <kbd>ESC</kbd> 건너뛰기</S.KeyboardHint>
+            <S.KeyboardHint><kbd>{isLastStep ? 'ENTER' : '→'}</kbd> {isLastStep ? '교범 관리로 이동' : '다음 안내'} <span>·</span> <kbd>ESC</kbd> 건너뛰기</S.KeyboardHint>
             <S.Actions>
               <S.Previous as="a" href={`/?step=${Math.max(1, stepIndex)}`} data-intro-action="previous" aria-label="이전 안내" aria-disabled={stepIndex === 0 && navigation.target === 0} onClick={(event: MouseEvent<HTMLAnchorElement>) => handleMove(event, -1)}>←</S.Previous>
               {isLastStep
-                ? <S.Next as="a" href="/training" data-intro-action="confirm">확인 <kbd>ENTER</kbd></S.Next>
+                ? <S.Next as={Link} href="/training/demo" data-intro-action="confirm">확인 <kbd>ENTER</kbd></S.Next>
                 : <S.Next as="a" href={`/?step=${stepIndex + 2}`} data-intro-action="next" aria-label="다음 안내" onClick={(event: MouseEvent<HTMLAnchorElement>) => handleMove(event, 1)}>다음 안내 <span aria-hidden="true">→</span></S.Next>}
             </S.Actions>
           </S.Navigation>

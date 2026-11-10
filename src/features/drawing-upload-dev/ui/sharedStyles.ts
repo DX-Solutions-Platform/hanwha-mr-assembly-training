@@ -20,5 +20,10 @@ export const PanelTitle = styled.h2(({ theme }) => ({
   display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: theme.space[3],
 }));
 export const ScrollArea = styled.div(({ theme }) => ({
-  minHeight: 0, overflow: 'auto', scrollbarWidth: 'thin', scrollbarColor: theme.color.primaryLine + ' transparent',
+  minHeight: 0, overflow: 'auto', scrollbarWidth: 'thin', scrollbarColor: theme.color.primarySoft + ' ' + theme.color.bgMid,
+  '&::-webkit-scrollbar': { width: 8, height: 8 },
+  '&::-webkit-scrollbar-track': { background: theme.color.bgMid },
+  '&::-webkit-scrollbar-thumb': { background: theme.color.primarySoft, border: '2px solid ' + theme.color.bgMid, borderRadius: 8 },
+  '&::-webkit-scrollbar-thumb:hover': { background: theme.color.primary },
+  '&:focus-visible': { outline: '2px solid ' + theme.color.primarySoft, outlineOffset: 2 },
 }));

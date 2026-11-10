@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+import { keyframes } from 'styled-components';
 import type { IntroVisual } from './introSteps';
 
 export const SPRITE_POSITION: Record<IntroVisual, string> = {
@@ -7,6 +9,43 @@ export const SPRITE_POSITION: Record<IntroVisual, string> = {
 function part(id: string, clip: string, origin: string, seed: number, restY = 0) {
   return { id, clip, origin, restY, duration: 4.8 + seed * .43, delay: -seed * .77, rise: 8 + seed % 3 * 4, tilt: seed % 2 ? 2 : -2 };
 }
+
+export const floatIntroObject = keyframes`
+  0%, 100% { transform: translate3d(0, var(--intro-rest-y), 0) rotate(var(--intro-tilt-start)); }
+  50% { transform: translate3d(0, var(--intro-rise-y), 0) rotate(var(--intro-tilt-end)); }
+`;
+
+export function introObjectStyle(objectPart: ReturnType<typeof part>) {
+  const { clip, origin, duration, delay, restY, rise, tilt } = objectPart;
+  return {
+    clipPath: clip, transformOrigin: origin, animationDuration: `${duration}s`, animationDelay: `${delay}s`,
+    '--intro-rest-y': `${restY}px`, '--intro-rise-y': `${restY - rise}px`,
+    '--intro-tilt-start': `${-tilt}deg`, '--intro-tilt-end': `${tilt}deg`,
+  } as CSSProperties;
+}
+
+// Boundaries follow the upper and lower edges of the orange spacer in the STEP card image.
+const spacerTop = [
+  '0 49%', '30.2% 49%', '31.3% 46.9%', '33.9% 44.8%', '35.8% 43.6%', '40.4% 45.4%', '45.6% 47.4%',
+  '50.8% 47.9%', '56% 46.7%', '61.2% 44.5%', '63.8% 44%', '67.1% 45.8%', '69% 49%', '100% 49%',
+];
+const spacerBottom = [
+  '0 69%', '30.2% 69.5%', '31.3% 71.2%', '33.9% 73.2%', '37.8% 74.9%', '43% 75.9%', '49% 76.2%',
+  '54% 76.1%', '58.6% 75.4%', '63.8% 73.7%', '67.1% 71.9%', '68.4% 70.4%', '70% 69%', '100% 69%',
+];
+const leftBoltFoot = ['25.5% 26.8%', '26% 28%', '27% 28.5%', '29.5% 28.5%', '30.7% 27.7%', '31% 26%'];
+const rightBoltFoot = ['69% 26%', '69.3% 27.7%', '70.5% 28.5%', '73% 28.5%', '74% 28%', '74.5% 26.8%'];
+const polygon = (points: string[]) => `polygon(${points.join(',')})`;
+
+export const STEP_ARTWORK_PARTS = [
+  part('rear-left-bolt', 'inset(0 57% 80% 31%)', '37% 11%', 1),
+  part('rear-right-bolt', 'inset(0 31% 80% 57%)', '63% 11%', 3),
+  part('front-left-bolt', polygon(['22% 9%', '33% 9%', '33% 23%', ...leftBoltFoot.toReversed(), '22% 26.8%']), '28% 20%', 5),
+  part('front-right-bolt', polygon(['67% 9%', '78% 9%', '78% 26.8%', ...rightBoltFoot.toReversed(), '67% 23%']), '72% 20%', 4),
+  part('upper-plate', polygon(['0 29%', ...leftBoltFoot, '44% 18.6%', '56% 18.6%', ...rightBoltFoot, '100% 29%', ...spacerTop.toReversed()]), '50% 33%', 0),
+  part('orange-spacer', polygon([...spacerTop, ...spacerBottom.toReversed()]), '50% 60%', 2),
+  part('lower-plate', polygon([...spacerBottom, '100% 100%', '0 100%']), '50% 86%', 6, 4),
+];
 
 /** 투명한 간격을 경계로 자른 각 오브젝트는 자기 중심과 고유한 주기로 움직입니다. */
 export const INTRO_OBJECT_PARTS = {

@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import styled from 'styled-components';
 import type { StepAssemblyPart } from '@/features/drawing-upload-dev/model/stepAssemblyParts';
 import type { StepModel } from '@/features/drawing-upload-dev/model/stepTypes';
+import { ScrollArea } from '@/features/drawing-upload-dev/ui/sharedStyles';
 import { getInstructionDrawingTargets, paginateInstructions, SHEET_COLUMNS, type AssemblyInstruction } from './assemblyInstructions';
 import { useStepDrawings } from './useStepDrawings';
 
@@ -82,8 +83,8 @@ export function InstructionSheetPreview({ model, parts, instructions }: {
   );
 }
 
-export function getInstructionFigureRequests(stepId: string, part: StepAssemblyPart, base: StepAssemblyPart) {
-  const { before, after } = getInstructionDrawingTargets(part, base);
+export function getInstructionFigureRequests(stepId: string, part: StepAssemblyPart, base: StepAssemblyPart, otherInstalled?: readonly StepAssemblyPart[]) {
+  const { before, after } = getInstructionDrawingTargets(part, base, otherInstalled);
   return [{ key: `${stepId}-before`, target: before }, { key: `${stepId}-after`, target: after }];
 }
 
@@ -150,8 +151,8 @@ export function DrawingImage({ image, alt, resolution = 1 }: { image?: string | 
 
 // The preview uses a paper palette so it can be read like the reference sheet.
 const paper = { background: '#ffffff', ink: '#22272b', subdued: '#4f575f', rule: '#c9cdd0', highlight: '#fff1e5' };
-const PreviewScroll = styled.div(({ theme }) => ({
-  minHeight: 0, overflow: 'auto', padding: theme.space[4], background: theme.color.bgEdge,
+const PreviewScroll = styled(ScrollArea)(({ theme }) => ({
+  padding: theme.space[4], background: theme.color.bgEdge,
 }));
 const Paper = styled.article(({ theme }) => ({
   width: '100%', minWidth: 950, maxWidth: 1280, minHeight: 670, margin: '0 auto ' + theme.space[4] + 'px',
