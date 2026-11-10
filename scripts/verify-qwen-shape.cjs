@@ -10,8 +10,8 @@ const output = path.join(os.tmpdir(), 'hanwha-qwen-shape-qa');
 const args = process.argv.slice(2);
 const fixture = args.find((arg) => !arg.startsWith('--')) || path.join(output, 'qwen-shape-comparison.pdf');
 const modelMode = args.find((arg) => arg.startsWith('--model='))?.slice('--model='.length);
-const modelNames = { '8b': 'qwen3-vl:8b', awq: 'cyankiwi/Qwen3.5-27B-AWQ-4bit' };
-const route = 'http://localhost:3000/training/upload';
+const modelNames = { '8b': 'qwen3-vl:8b', awq: 'soyrsoyr/Qwen3.8-27B-W4A16-AWQ-GPTQ' };
+const route = 'http://localhost:3000/training/upload-dev';
 const expected = new Map([
   ['QA-001', '플랜지'], ['QA-002', '볼트'], ['QA-003', '너트'],
   ['QA-004', '와셔'], ['QA-005', '베이스판'], ['QA-006', '축'],
@@ -73,7 +73,7 @@ async function measure(browser, mode, index, hash) {
       if (request.url().endsWith('/api/drawing/shape-name')) requests.push(request.url());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(route + '?qwen=' + mode, { waitUntil: 'networkidle0' });
+    await page.goto(mode === 'awq' ? route : route + '?qwen=' + mode, { waitUntil: 'networkidle0' });
     const pdfMs = await upload(page);
     const qwen = useQwen ? await waitForQwen(page, model) : null;
     await click('부품 검토·보정');

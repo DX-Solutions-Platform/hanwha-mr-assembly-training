@@ -47,6 +47,10 @@ export function LibraryPartForm({ part, role, onSaved, onClose }: {
         <ReviewInput id={'library-' + key} value={form[key]} maxLength={key === 'revision' ? 32 : key === 'partNumber' ? 200 : 2000} readOnly={key === 'partNumber' && !!part} required={key === 'partNumber' || key === 'name' || (key === 'material' && form.status === 'approved')} onChange={(event) => setForm({ ...form, [key]: event.target.value })} />
       </ReviewLabel>)}
       <ReviewLabel htmlFor="library-category">분류<Select id="library-category" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as PartCategory })}>{Object.entries(CATEGORY_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select></ReviewLabel>
+      <ReviewLabel htmlFor="library-assembly-action">기본 조립 유형<Select id="library-assembly-action" value={form.assemblyAction ?? ''} onChange={(event) => {
+        const { value } = event.target;
+        setForm({ ...form, assemblyAction: value === 'place' || value === 'fasten' ? value : null });
+      }}><option value="">미지정</option><option value="place">놓기</option><option value="fasten">체결</option></Select></ReviewLabel>
       <ReviewLabel htmlFor="library-status">상태<Select id="library-status" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value === 'approved' ? 'approved' : 'pending' })}><option value="pending">승인 대기</option><option value="approved">승인</option></Select></ReviewLabel>
       <Wide><ReviewLabel htmlFor="library-dimensions">치수<ReviewTextArea id="library-dimensions" value={dimensions} placeholder="예: Ø24 | mm" onChange={(event) => setDimensions(event.target.value)} /></ReviewLabel></Wide>
       {error && <Wide><StateText role="alert" $tone="danger">{error}</StateText></Wide>}

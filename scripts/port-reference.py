@@ -13,12 +13,18 @@ else:
 args = argparse.ArgumentParser(description=__doc__)
 args.add_argument('--source', type=Path, default=default_source)
 args.add_argument('--output', type=Path, default=project / 'src/features/reference-pages/generated')
+args.add_argument('--drawing-flow', action='store_true', help='Port the Demo 7 drawing flow handoff')
 options = args.parse_args()
 source, target = options.source, options.output
 target.mkdir(parents=True, exist_ok=True)
 PAGES = {'Drawing Upload': 'DrawingUploadReference', 'Training Menu': 'TrainingMenuReference', 'Stool Training': 'StoolTrainingReference', 'Complex Explode': 'ComplexExplodeReference', 'HUD Prototype': 'HudPrototypeReference', 'Design Guide': 'DesignGuideReference'}
 VOID = {'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'}
 ROUTES = {'Training Menu.dc.html':'/training/cards', 'Drawing Upload.dc.html':'/training/upload', 'Stool Training.dc.html':'/training/stool', 'HUD Prototype.dc.html':'/training/hud', 'Demo 1.dc.html':'/training', 'Complex Explode.dc.html':'/training/complex', 'Design Guide.dc.html':'/design-guide'}
+if options.drawing_flow:
+    from port_drawing_flow import adapt_drawing, drawing_template, install_assets
+    PAGES = {'demo7d/Flow Main': 'DrawingFlowMain', 'demo7d/Flow Steps': 'DrawingFlowSteps'}
+    ROUTES['Demo 7 전체.dc.html'] = '/training'
+    install_assets(source, project / 'public/vendor/drawing-flow')
 
 class Parser(HTMLParser):
     def __init__(self):
@@ -54,9 +60,9 @@ def css_object(css,aliases):
         if not k: continue
         result.append(dump(k if k.startswith('--') else camel(k))+':'+value(val,aliases))
     return '{'+','.join(result)+'}'
-ATTRS={'viewbox':'viewBox','for':'htmlFor','tabindex':'tabIndex','readonly':'readOnly','autofocus':'autoFocus','oninput':'onChange','basefrequency':'baseFrequency','numoctaves':'numOctaves','stitchtiles':'stitchTiles'}
+ATTRS={'viewbox':'viewBox','for':'htmlFor','tabindex':'tabIndex','readonly':'readOnly','autofocus':'autoFocus','oninput':'onChange','basefrequency':'baseFrequency','numoctaves':'numOctaves','stitchtiles':'stitchTiles','contenteditable':'contentEditable','spellcheck':'spellCheck','inputmode':'inputMode'}
 TAGS={'feturbulence':'feTurbulence','fecolormatrix':'feColorMatrix'}
-EVENTS={x.lower():x for x in ['onClick','onChange','onContextMenu','onPointerDown','onPointerMove','onPointerUp','onPointerLeave','onMouseEnter','onMouseLeave','onWheel','onDragOver','onDragLeave','onDrop']}
+EVENTS={x.lower():x for x in ['onClick','onDoubleClick','onChange','onBlur','onKeyDown','onContextMenu','onPointerDown','onPointerMove','onPointerUp','onPointerLeave','onMouseDown','onMouseEnter','onMouseLeave','onWheel','onDragStart','onDragEnd','onDragOver','onDragLeave','onDrop']}
 def render(node, aliases=(), key=None):
     if isinstance(node,str):
         if not node.strip(): return ''
@@ -71,14 +77,24 @@ def render(node, aliases=(), key=None):
     if tag=='root':return ''.join(render(c,aliases)for c in children)
     props=['as='+dump(TAGS.get(tag,tag))]
     for k,x in a.items():
-        if k.startswith('hint-'):continue
+        if k.startswith('hint-') or (options.drawing_flow and k == 'style-focus'):continue
         if k=='style':props.append('$style={'+css_object(x,aliases)+'}');continue
         if k=='style-hover':props.append('$hover={'+value(x,aliases)+'}');continue
         if k=='href' and x:
             for old,new in ROUTES.items():x=x.replace(old,new)
         if k=='src' and x and x.startswith('uploads/'):x='/reference-assets/'+x[8:]
         name=ATTRS.get(k,EVENTS.get(k,k if k.startswith(('data-','aria-')) else camel(k)))
+        if options.drawing_flow and k in ('multiple', 'draggable', 'disabled', 'checked', 'selected') and x is not None and not x.startswith('{{'):
+            props.append(name+'={true}')
+            continue
         props.append(name+'={'+value(x,aliases)+'}')
+    if options.drawing_flow and tag in ('div', 'span') and 'onclick' in a and 'ondragstart' not in a:
+        handler = value(a['onclick'],aliases)
+        props.extend(['role="button"', 'tabIndex={0}'])
+        if 'onkeydown' not in a:
+            props.append('onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); '+handler+'?.(event); } }}')
+    if options.drawing_flow and 'contenteditable' in a:
+        props.append('suppressContentEditableWarning={true}')
     if tag in VOID:return '<SourceNode '+' '.join(props)+' />'
     return '<SourceNode '+' '.join(props)+'>'+''.join(render(c,aliases)for c in children)+'</SourceNode>'
 
@@ -115,9 +131,13 @@ manifest=[]
 for file,name in PAGES.items():
     raw=(source/(file+'.dc.html')).read_text(encoding='utf-8')
     template=raw.split('<x-dc>',1)[1].split('</x-dc>',1)[0]
+    if options.drawing_flow:
+        template=drawing_template(template,name)
     parser=Parser();parser.feed(template)
     logic=re.search(r'<script[^>]*data-dc-script[^>]*>(.*?)</script>',raw,re.S).group(1).strip()
     logic=adapt(logic,name)
+    if options.drawing_flow:
+        logic=adapt_drawing(logic,name)
     css='\n'.join(re.findall(r'<style>(.*?)</style>',template,re.S))
     # 전역 html/body 규칙은 페이지 루트로 격리합니다. 원본 keyframes와 폰트만 전역으로 둡니다.
     css=re.sub(r'html\s*,\s*body\s*\{[^}]*\}', '',css)
@@ -126,9 +146,17 @@ for file,name in PAGES.items():
     css=css.replace("'JetBrains Mono',monospace", "var(--font-mono),'JetBrains Mono',monospace")
     jsx=render(parser.root)
     pos=logic.rfind('}')
-    logic=logic[:pos]+'\n  render() { const v = this.renderVals(); return <><ReferenceCss />'+jsx+'</>; }\n'+logic[pos:]
+    logic=logic[:pos]+'\n  render() { const v = this.renderVals(); return <>'+('' if options.drawing_flow else '<ReferenceCss />')+jsx+'</>; }\n'+logic[pos:]
     imports="import { saveGeneratedTraining } from '../referenceStorage';\n" if name=='DrawingUploadReference' else ''
-    content="/* eslint-disable -- 원본의 비정형 장면/상태 로직을 보존한 생성 파일. */\n// @ts-nocheck\n// 수정은 port-reference.py 변환기에서 합니다. 원본 파일 해시는 manifest.json에 있습니다.\n'use client';\nimport React from 'react';\nimport { createGlobalStyle } from 'styled-components';\nimport { PortedLogic, SourceNode } from '../referenceRuntime';\n"+imports+'const ReferenceCss = createGlobalStyle`'+css+'`;\n'+logic+'\n'
+    if options.drawing_flow:
+        imports="import { FlowLogic, escapeFlowHtml, localPlanSuggestion } from '@/features/drawing-flow/flowLogic';\nimport { cloneFlowProject, prepareFlowProject } from '@/features/drawing-flow/flowProject';\n"
+        imports+="import { FLOW_FASTENING_TOOLS, drawingToolKey, findFlowFasteningTool } from '@/features/drawing-flow/flowToolCatalog';\n"
+        if name=='DrawingFlowSteps':
+            imports+="import { createStepWireGeometry } from '@/features/drawing-flow/stepWireGeometry';\n"
+        runtime="import { SourceNode } from '../referenceRuntime';\n"
+    else:
+        runtime="import { createGlobalStyle } from 'styled-components';\nimport { PortedLogic, SourceNode } from '../referenceRuntime';\n"
+    content="/* eslint-disable -- 원본의 비정형 장면/상태 로직을 보존한 생성 파일. */\n// @ts-nocheck\n// 수정은 port-reference.py 변환기에서 합니다. 원본 파일 해시는 manifest.json에 있습니다.\n'use client';\nimport React from 'react';\n"+runtime+imports+('' if options.drawing_flow else 'const ReferenceCss = createGlobalStyle`'+css+'`;\n')+logic+'\n'
     # inline mono 폰트도 next/font의 동일 폰트를 사용합니다.
     content=content.replace("'JetBrains Mono',monospace", "var(--font-mono),'JetBrains Mono',monospace")
     destination = target / (name + '.tsx')
@@ -136,7 +164,7 @@ for file,name in PAGES.items():
         destination.write_text(content, encoding='utf-8')
     manifest.append({'reference':file+'.dc.html','sha256':hashlib.sha256(raw.encode()).hexdigest(),'component':name,'bytes':len(content.encode())})
 manifest_content = json.dumps(manifest, ensure_ascii=False, indent=2)
-manifest_path = target / 'manifest.json'
+manifest_path = target / ('drawing-flow-manifest.json' if options.drawing_flow else 'manifest.json')
 if not manifest_path.exists() or manifest_path.read_text(encoding='utf-8') != manifest_content:
     manifest_path.write_text(manifest_content, encoding='utf-8')
 print(manifest)

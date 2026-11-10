@@ -45,7 +45,7 @@ async function main() {
     await page.setViewport({ width: 1920, height: 1080 });
     const click = makeClick(page);
     const upload = async (file) => {
-      await page.goto(base + '/training/upload', { waitUntil: 'networkidle0' });
+      await page.goto(base + '/training/upload-dev', { waitUntil: 'networkidle0' });
       await (await page.waitForSelector('input[aria-label="분석할 PDF 선택"]')).uploadFile(file);
       await page.waitForSelector('[data-analysis-status="complete"]');
     };

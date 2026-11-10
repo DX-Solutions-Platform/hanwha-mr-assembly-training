@@ -3,7 +3,7 @@ import { createPartReview, getFieldCandidates, getReviewIssues, getTemporaryPart
 import type { ReviewDocument, ReviewedDimension, ReviewedPart, ReviewGroup, ReviewPackage } from './reviewTypes';
 import { decodeModelData } from '../model/modelPersistence';
 import type { ReviewModelData } from '../model/stepTypes';
-import { isShapeNameKind, isShapeNameModel, SHAPE_NAME_LABEL, type ShapeNameSuggestion } from '../shape-name/shapeNameTypes';
+import { isSavedShapeNameModel, isShapeNameKind, SHAPE_NAME_LABEL, type ShapeNameSuggestion } from '../shape-name/shapeNameTypes';
 
 export const REVIEW_STORAGE_PREFIX = 'hanwha.part-review.v1.';
 export function createReviewPackage(document: ReviewDocument, groupList: ReviewGroup[], partList: ReviewedPart[], pageList: DrawingPage[], modelData: ReviewModelData = { model: null, modelLinks: [] }): ReviewPackage {
@@ -33,7 +33,7 @@ function date(value: unknown) {
 function readShapeSuggestion(value: unknown, group: ReviewGroup, name: string, pageCount: number): ShapeNameSuggestion {
   const item = object(value), source = object(item.source), rect = object(source.rect);
   const reason = text(item.reason, 240).trim();
-  if (!isShapeNameKind(item.kind) || SHAPE_NAME_LABEL[item.kind] !== name || !isShapeNameModel(item.model) || !reason) throw new Error('형상 추정 품명이 올바르지 않습니다.');
+  if (!isShapeNameKind(item.kind) || SHAPE_NAME_LABEL[item.kind] !== name || !isSavedShapeNameModel(item.model) || !reason) throw new Error('형상 추정 품명이 올바르지 않습니다.');
   const { x, y, width, height } = rect;
   if (typeof x !== 'number' || typeof y !== 'number' || typeof width !== 'number' || typeof height !== 'number' || ![x, y, width, height].every(Number.isFinite) || x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1.000001 || y + height > 1.000001) throw new Error('형상 추정의 도면 위치가 올바르지 않습니다.');
   const pageNumber = source.pageNumber;

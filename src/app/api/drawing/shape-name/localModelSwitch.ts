@@ -38,7 +38,11 @@ async function stopAwq() {
 
 async function unload8b(signal: AbortSignal) {
   const options = { cache: 'no-store', redirect: 'error', signal } as const;
-  const response = await fetch(OLLAMA_URL + '/api/ps', options);
+  const response = await fetch(OLLAMA_URL + '/api/ps', options).catch((error: unknown) => {
+    if (error instanceof TypeError && (error.cause as NodeJS.ErrnoException | undefined)?.code === 'ECONNREFUSED') return null;
+    throw error;
+  });
+  if (!response) return;
   if (!response.ok) throw new Error('8B 실행 상태를 확인하지 못했습니다.');
   const { models } = await response.json();
   if (!Array.isArray(models)) throw new Error('Ollama 실행 목록이 올바르지 않습니다.');
@@ -79,5 +83,5 @@ export async function prepareLocalModel(model: ShapeNameModel, signal: AbortSign
     if (await isAwqListening()) return;
     await delay(1000, undefined, { signal });
   }
-  throw new Error('WSL2에서 27B 서버를 시작하지 못했습니다.');
+  throw new Error('WSL2에서 Qwen3.8 27B를 시작하지 못했습니다. README의 WSL2·모델 설치 절차를 확인해 주세요.');
 }

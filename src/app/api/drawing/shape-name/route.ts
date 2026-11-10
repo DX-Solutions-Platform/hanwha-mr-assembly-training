@@ -1,5 +1,5 @@
 import {
-  AWQ_SHAPE_NAME_MODEL, isShapeNameModel, MAX_SHAPE_IMAGE_LENGTH, readShapeNameResult, SHAPE_NAME_LABEL, SHAPE_NAME_MODEL,
+  AWQ_SHAPE_NAME_MODEL, DEFAULT_SHAPE_NAME_MODEL, isShapeNameModel, MAX_SHAPE_IMAGE_LENGTH, readShapeNameResult, SHAPE_NAME_LABEL,
 } from '@/features/drawing-upload-dev/shape-name/shapeNameTypes';
 import { inferShapeNameContent, LocalVisionError } from './localVision';
 
@@ -55,7 +55,7 @@ async function readInput(request: Request) {
       }
       chunks.push(value);
     }
-    const { image, model = SHAPE_NAME_MODEL } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const { image, model = DEFAULT_SHAPE_NAME_MODEL } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (typeof image !== 'string' || image.length > MAX_SHAPE_IMAGE_LENGTH || !/^\/9j\/[A-Za-z0-9+/]+={0,2}$/.test(image)) return null;
     return isShapeNameModel(model) ? { image, model } : null;
   } catch {

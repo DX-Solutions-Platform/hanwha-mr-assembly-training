@@ -1,3 +1,4 @@
+import { isScrewOrBolt } from '../../drawing-upload-dev/model/fastenerName';
 import type { StepAssemblyPart } from '../../drawing-upload-dev/model/stepAssemblyParts';
 import type { StepBounds } from '../../drawing-upload-dev/model/stepTypes';
 import type { DrawingTarget } from './renderPartDrawing';
@@ -18,7 +19,6 @@ export function createInstructionDrafts(parts: readonly StepAssemblyPart[]): Ass
   return parts.map((part) => {
     const name = part.name.replace(/_/g, ' ');
     const isTorx = /\btorx\b/i.test(name);
-    const isScrewOrBolt = /\b(bolt|screw)\b|볼트|나사/i.test(name) || (isTorx && /\bm\d+(?:\.\d+)?\s*[x×]\s*\d/i.test(name));
     const isNut = /\bnut\b|너트/i.test(name);
     const isWasher = /\bwasher\b|와셔/i.test(name);
     const isWiring = /\b(wire|cable|harness)\b|배선|전선|케이블/i.test(name);
@@ -27,7 +27,7 @@ export function createInstructionDrafts(parts: readonly StepAssemblyPart[]): Ass
     let description = '부품을 조립도에 표시된 위치와 방향에 맞춰 놓고, 작업지시서에 지정된 방식으로 장착하세요.';
     let tool = '장착 방식에 맞는 공구 확인';
     let torque = '체결 여부 확인';
-    if (isScrewOrBolt) {
+    if (isScrewOrBolt(name)) {
       const bit = isTorx ? 'Torx 비트' : /\bphillips\b/i.test(name) ? '십자 비트' : '';
       const toolInstruction = bit ? `규격에 맞는 ${bit}` : '작업지시서에 지정된 공구';
       description = `체결 부품을 조립도에 표시된 위치에 넣고, ${toolInstruction}로 체결하세요.`;

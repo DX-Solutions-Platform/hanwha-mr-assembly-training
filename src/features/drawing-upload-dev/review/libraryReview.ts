@@ -3,7 +3,11 @@ import { getFieldCandidates, revisePart } from './reviewModel';
 import type { ReviewDocument, ReviewedPart, ReviewGroup } from './reviewTypes';
 
 export async function lookupLibrary(groups: ReviewGroup[], signal: AbortSignal, additionalNumbers: string[] = []) {
-  const numbers = [...new Set([...groups.map((group) => group.partNumber), ...additionalNumbers])].filter((number) => number && number.length <= 200);
+  return lookupLibraryNumbers([...groups.map((group) => group.partNumber), ...additionalNumbers], signal);
+}
+
+export async function lookupLibraryNumbers(partNumbers: string[], signal: AbortSignal) {
+  const numbers = [...new Set(partNumbers)].filter((number) => number && number.length <= 200);
   const matches = new Map<string, LibraryMatch>();
   const existingModelNumbers = new Set<string>();
   for (let index = 0; index < numbers.length; index += 500) {

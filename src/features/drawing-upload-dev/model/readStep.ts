@@ -1,10 +1,10 @@
 import { createStepModel } from './stepModel';
 import { STEP_MAX_FILE_MB, type StepMesh, type StepModel, type StepNode, type StepPhase } from './stepTypes';
 
-export async function readStep(file: File, signal: AbortSignal, onPhase: (phase: StepPhase) => void): Promise<StepModel> {
+export async function readStep(file: File, signal: AbortSignal, onPhase: (phase: StepPhase) => void, maxFileMb = STEP_MAX_FILE_MB): Promise<StepModel> {
   const check = () => { if (signal.aborted) throw new DOMException('STEP 읽기를 중지했습니다.', 'AbortError'); };
   if (!/\.(step|stp)$/i.test(file.name)) throw new Error('.step 또는 .stp 파일을 선택해 주세요.');
-  if (file.size > STEP_MAX_FILE_MB * 1024 * 1024) throw new Error(STEP_MAX_FILE_MB + ' MB 이하의 STEP을 선택해 주세요.');
+  if (file.size > maxFileMb * 1024 * 1024) throw new Error(maxFileMb + ' MB 이하의 STEP을 선택해 주세요.');
   onPhase('file');
   const buffer = await file.arrayBuffer(); check();
   const text = new TextDecoder().decode(buffer);

@@ -2,15 +2,18 @@
 set -euo pipefail
 
 runtime_dir="${XDG_DATA_HOME:-$HOME/.local/share}/hanwha-qwen-awq"
-model_dir="${2:-/mnt/d/models/qwen3.5-27b-awq-4bit}"
-model_name="cyankiwi/Qwen3.5-27B-AWQ-4bit"
+project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+model_dir="${2:-$project_dir/.local-ai/models/qwen3.8-27b-w4a16-awq-gptq}"
+model_name="soyrsoyr/Qwen3.8-27B-W4A16-AWQ-GPTQ"
+previous_model_name="cyankiwi/Qwen3.5-27B-AWQ-4bit"
 
 case "${1:-serve}" in
   stop)
     # Only stop this application's vLLM service, including instances started manually.
     while read -r pid args; do
       if [[ "$args" == *"$runtime_dir/venv/bin/vllm serve "* &&
-            "$args" == *" --served-model-name $model_name "* &&
+            ( "$args" == *" --served-model-name $model_name "* ||
+              "$args" == *" --served-model-name $previous_model_name "* ) &&
             "$args" == *" --port 18080 "* ]]; then
         kill -TERM "$pid" 2>/dev/null || continue
         for ((attempt = 0; attempt < 100; attempt++)); do
@@ -41,9 +44,10 @@ case "${1:-serve}" in
       printf '%s\n' 'Run this script with install inside WSL2 first.' >&2
       exit 1
     fi
-    for file in config.json model.safetensors.index.json tokenizer.json chat_template.jinja \
-      model-00001-of-00004.safetensors model-00002-of-00004.safetensors \
-      model-00003-of-00004.safetensors model-00004-of-00004.safetensors; do
+    for file in config.json generation_config.json model.safetensors.index.json \
+      tokenizer.json tokenizer_config.json chat_template.jinja \
+      preprocessor_config.json video_preprocessor_config.json \
+      model-00001-of-00002.safetensors model-00002-of-00002.safetensors model-mtp.safetensors; do
       if [[ ! -s "$model_dir/$file" ]]; then
         printf 'Missing local AWQ model file: %s\n' "$model_dir/$file" >&2
         exit 1
@@ -56,7 +60,7 @@ case "${1:-serve}" in
     flock -n 9
     exec "$runtime_dir/venv/bin/vllm" serve "$model_dir" \
       --served-model-name "$model_name" --host 127.0.0.1 --port 18080 \
-      --max-model-len 4096 --max-num-seqs 1 --gpu-memory-utilization 0.80 \
+      --max-model-len 4096 --max-num-seqs 1 --gpu-memory-utilization 0.90 \
       --limit-mm-per-prompt '{"image":{"count":1,"width":1024,"height":1024},"video":0}' \
       --safetensors-load-strategy prefetch --gdn-prefill-backend triton --enforce-eager \
       --reasoning-parser qwen3

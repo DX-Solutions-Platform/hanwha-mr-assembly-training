@@ -94,7 +94,7 @@ async function checkBrowser() {
       const filename = path.join(output, name); fs.writeFileSync(filename, JSON.stringify(document));
       const input = await page.$('input[aria-label="조립품 JSON 선택"]'); await input.uploadFile(filename);
     };
-    await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' }); await capture();
+    await page.goto('http://localhost:3000/training/upload-dev', { waitUntil: 'networkidle0' }); await capture();
     await click('조립품 편집 예시'); await ready();
     assert.equal(await page.$$eval('[data-assembly-part]', (nodes) => nodes.length), 10);
     const initial = await data(), canvas = await waitCanvas(), rect = await canvas.boundingBox();

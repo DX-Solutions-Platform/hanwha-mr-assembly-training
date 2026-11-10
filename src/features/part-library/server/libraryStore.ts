@@ -52,7 +52,9 @@ export function parseLibraryPart(raw: unknown): LibraryPartInput | null {
     });
     const appearance = row.appearance === undefined ? undefined : readModelAppearance(row.appearance);
     if (appearance === null) return null;
-    return { partNumber, name, material, category, status, specification: read('specification'), revision: read('revision', 32) || 'A', source: read('source'), usage: read('usage'), dimensionList, ...(appearance ? { appearance } : {}) };
+    const { assemblyAction } = row;
+    if (assemblyAction !== undefined && assemblyAction !== null && assemblyAction !== 'place' && assemblyAction !== 'fasten') return null;
+    return { partNumber, name, material, category, status, specification: read('specification'), revision: read('revision', 32) || 'A', source: read('source'), usage: read('usage'), dimensionList, ...(appearance ? { appearance } : {}), ...(assemblyAction !== undefined ? { assemblyAction } : {}) };
   } catch {
     return null;
   }

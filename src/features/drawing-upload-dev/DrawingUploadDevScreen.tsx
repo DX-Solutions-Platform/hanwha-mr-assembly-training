@@ -20,7 +20,7 @@ import { TaskPanel } from './ui/TaskPanel';
 import { ResultPanel } from './ui/ResultPanel';
 import { SourceViewer } from './ui/SourceViewer';
 import { ActionButton } from './ui/sharedStyles';
-import { SHAPE_NAME_MODEL, type ShapeNameModel } from './shape-name/shapeNameTypes';
+import { DEFAULT_SHAPE_NAME_MODEL, type ShapeNameModel } from './shape-name/shapeNameTypes';
 import { planLibraryAssembly } from './assembly/libraryAssemblyPlan';
 import { planFlangeDrafts } from './generate/planFlangeDrafts';
 import { useFlangeDrafts, type GeneratedFlangeDraft } from './generate/useFlangeDrafts';
@@ -41,7 +41,7 @@ const AssemblyWorkspace = dynamic(() => import('./assembly/AssemblyWorkspace').t
 const LibraryAssemblyWorkspace = dynamic(() => import('./assembly/LibraryAssemblyWorkspace').then((module) => module.LibraryAssemblyWorkspace), { ssr: false });
 const DrawingDraftWorkspace = dynamic(() => import('./generate/drawing-draft/DrawingDraftWorkspace').then((module) => module.DrawingDraftWorkspace), { ssr: false, loading: () => <AssemblyLoading role="status">입체 모델을 준비합니다.</AssemblyLoading> });
 const FinishedProductWorkspace = dynamic(() => import('./product/FinishedProductWorkspace').then((module) => module.FinishedProductWorkspace), { ssr: false, loading: () => <AssemblyLoading role="status">완제품 화면을 준비합니다.</AssemblyLoading> });
-export function DrawingUploadDevScreen({ initialMode = 'analysis', shapeNameModel = SHAPE_NAME_MODEL }: { initialMode?: UploadMode; shapeNameModel?: ShapeNameModel | null }) {
+export function DrawingUploadDevScreen({ initialMode = 'analysis', shapeNameModel = DEFAULT_SHAPE_NAME_MODEL }: { initialMode?: UploadMode; shapeNameModel?: ShapeNameModel | null }) {
   const analysis = usePdfAnalysis();
   const review = usePartReview(analysis.file, analysis.pageList, analysis.status, shapeNameModel);
   const current = review.current;

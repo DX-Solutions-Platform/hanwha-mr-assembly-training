@@ -12,7 +12,7 @@ export const SourceNode = styled.div.attrs<SourceProps>(({ $style }) => ({ style
 export interface ReferenceProps { cardIndex?: number; driveMenu?: boolean; }
 
 /** DCLogic을 대체하는 React 수명주기. 장면·타이밍 값은 원본 생성 컴포넌트에 있습니다. */
-export class PortedLogic extends React.Component<ReferenceProps, Record<string, unknown>> {
+export class PortedLogic<Props extends ReferenceProps = ReferenceProps> extends React.Component<Props, Record<string, unknown>> {
   referenceState: Record<string, unknown> = {};
   private disposed = false;
   private frames = new Set<number>();

@@ -8,7 +8,7 @@ import { bindStepShape, unbindStepShape } from '../model/modelBindings';
 import type { ReviewModelData, StepManifest } from '../model/stepTypes';
 import { buildBulkReviewPlan, confirmReadyParts, type BulkReviewOptions } from './bulk/bulkReviewModel';
 import { canSuggestName, useShapeNames } from '../shape-name/useShapeNames';
-import { AWQ_SHAPE_NAME_MODEL, SHAPE_NAME_LABEL, SHAPE_NAME_MODEL, type ShapeArea, type ShapeNameModel, type ShapeNameSuggestion } from '../shape-name/shapeNameTypes';
+import { AWQ_SHAPE_NAME_MODEL, DEFAULT_SHAPE_NAME_MODEL, SHAPE_NAME_LABEL, type ShapeArea, type ShapeNameModel, type ShapeNameSuggestion } from '../shape-name/shapeNameTypes';
 import { applyLibraryMatch, lookupLibrary } from './libraryReview';
 import type { LibraryMatch } from '@/features/part-library/libraryTypes';
 import { readOutlineFlangeLinks, storeOutlineFlangeLink, type OutlineFlangeLink } from '../generate/outlineFlangeLinks';
@@ -20,7 +20,7 @@ interface ReviewState extends ReviewModelData {
   existingLibraryModels: Set<string> | null;
   outlineLinks: OutlineFlangeLink[];
 }
-export function usePartReview(file: File | null, pageList: DrawingPage[], status: AnalysisStatus, model: ShapeNameModel | null = SHAPE_NAME_MODEL) {
+export function usePartReview(file: File | null, pageList: DrawingPage[], status: AnalysisStatus, model: ShapeNameModel | null = DEFAULT_SHAPE_NAME_MODEL) {
   const [state, setState] = useState<ReviewState | null>(null);
   const [loadError, setLoadError] = useState<{ file: File; message: string } | null>(null);
   const acceptShapeName = useCallback((groups: ReviewGroup[], key: string, suggestion: ShapeNameSuggestion) => {

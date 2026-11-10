@@ -17,7 +17,7 @@ export async function inferShapeNameContent(model: ShapeNameModel, image: string
     if (!modelsResponse.ok) throw new LocalVisionError('WSL2의 vLLM 모델 목록을 읽을 수 없습니다.', 503);
     const { data } = await modelsResponse.json();
     if (!Array.isArray(data) || !data.some((entry) => entry?.id === model)) {
-      throw new LocalVisionError('WSL2에서 Qwen3.5-27B-AWQ-4bit를 실행해 주세요.', 503);
+      throw new LocalVisionError('WSL2의 vLLM에서 ' + model + ' 모델을 실행해 주세요.', 503);
     }
     const response = await fetch(VLLM + '/chat/completions', {
       ...post,
@@ -35,7 +35,7 @@ export async function inferShapeNameContent(model: ShapeNameModel, image: string
         max_tokens: 1920,
       }),
     });
-    if (!response.ok) throw new LocalVisionError('WSL2의 Qwen 27B AWQ가 도면을 처리하지 못했습니다.', 502);
+    if (!response.ok) throw new LocalVisionError('WSL2의 Qwen3.8 27B가 도면을 처리하지 못했습니다.', 502);
     const result = await response.json();
     if (result.model !== model) throw new LocalVisionError('vLLM 응답 모델이 선택한 AWQ 모델과 다릅니다.', 502);
     return result.choices?.[0]?.message?.content;

@@ -178,7 +178,7 @@ async function checkBrowser() {
     const complete = () => page.waitForSelector('[data-step-status=complete]', { timeout: 45000 });
     const shape = (id) => page.click('[data-step-shape="shape-' + id + '"]');
     const exportData = async () => { await click('JSON 내보내기'); return page.evaluate(async () => JSON.parse(await window.__reviewExport.text())); };
-    await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' });
+    await page.goto('http://localhost:3000/training/upload?mode=step', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[aria-label="STEP 조립품 업로드"]');
     const [chooser] = await Promise.all([page.waitForFileChooser(), click('STEP 파일 선택')]);
     await chooser.accept([cubeFile]);

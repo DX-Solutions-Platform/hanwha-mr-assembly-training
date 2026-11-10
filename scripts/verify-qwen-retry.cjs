@@ -10,7 +10,7 @@ const base = process.env.QWEN_TEST_URL ?? 'http://localhost:3000';
 const folder = path.join(os.tmpdir(), 'hanwha-qwen-shape-qa');
 const fixture = path.join(folder, 'qwen-shape-comparison.pdf');
 const originalHash = '00080d5b3c9b59f9a411c0f9b0e75e7af392bab7dd0251c27f676d5ef90ffb6e';
-const eight = 'qwen3-vl:8b', awq = 'cyankiwi/Qwen3.5-27B-AWQ-4bit';
+const eight = 'qwen3-vl:8b', awq = 'soyrsoyr/Qwen3.8-27B-W4A16-AWQ-GPTQ';
 const awqUrl = 'http://127.0.0.1:18080/v1/models';
 const read8b = async () => (await (await fetch('http://127.0.0.1:11434/api/ps')).json()).models.some((model) => model.name === eight);
 const awqOnline = async () => (await fetch(awqUrl, { signal: AbortSignal.timeout(1000) }).catch(() => null))?.ok === true;
@@ -41,7 +41,7 @@ async function main() {
     });
     const click = makeClick(page);
     const read = () => page.evaluate((hash) => JSON.parse(localStorage.getItem('hanwha.part-review.v1.' + hash)).parts, originalHash);
-    await page.goto(base + '/training/upload', { waitUntil: 'networkidle0' });
+    await page.goto(base + '/training/upload-dev?qwen=8b', { waitUntil: 'networkidle0' });
     const input = await page.waitForSelector('input[aria-label="분석할 PDF 선택"]');
     await input.uploadFile(fixture);
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => !button.disabled && button.textContent === '부품 검토·보정'));

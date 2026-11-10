@@ -5,6 +5,7 @@ export type PartCategory = keyof typeof CATEGORY_LABEL;
 export type LibraryRole = typeof ROLE_LIST[number];
 export type LibraryDimension = { value: string; unit: string };
 export type LibraryAsset = { key: string; name: string };
+export type AssemblyAction = 'place' | 'fasten';
 export interface LibraryPartInput {
   partNumber: string;
   name: string;
@@ -16,6 +17,7 @@ export interface LibraryPartInput {
   usage: string;
   source: string;
   dimensionList: LibraryDimension[];
+  assemblyAction?: AssemblyAction | null;
   appearance?: ModelAppearance;
 }
 export interface LibraryPart extends LibraryPartInput {
@@ -23,9 +25,9 @@ export interface LibraryPart extends LibraryPartInput {
   photo?: LibraryAsset;
   history: { date: string; revision: string; role: LibraryRole; action: string }[];
 }
-export type LibraryMatch = Pick<LibraryPart, 'partNumber' | 'name' | 'material' | 'specification' | 'revision' | 'dimensionList' | 'model' | 'appearance'>;
-export function toLibraryMatch({ partNumber, name, material, specification, revision, dimensionList, model, appearance }: LibraryPart): LibraryMatch {
-  return { partNumber, name, material, specification, revision, dimensionList, ...(model ? { model } : {}), ...(appearance ? { appearance } : {}) };
+export type LibraryMatch = Pick<LibraryPart, 'partNumber' | 'name' | 'material' | 'specification' | 'revision' | 'dimensionList' | 'model' | 'appearance' | 'assemblyAction'>;
+export function toLibraryMatch({ partNumber, name, material, specification, revision, dimensionList, model, appearance, assemblyAction }: LibraryPart): LibraryMatch {
+  return { partNumber, name, material, specification, revision, dimensionList, ...(model ? { model } : {}), ...(appearance ? { appearance } : {}), ...(assemblyAction ? { assemblyAction } : {}) };
 }
 
 export const normalizeLibraryNumber = (value: string) => value.normalize('NFKC').replace(/\s+/g, ' ').trim();

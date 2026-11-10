@@ -51,7 +51,7 @@ async function checkBrowser() {
       const original = URL.createObjectURL;
       URL.createObjectURL = function(blob) { if (blob.type === 'application/json') window.__modelJson = blob; return original.call(this, blob); };
     });
-    await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' }); await capture();
+    await page.goto('http://localhost:3000/training/upload-dev', { waitUntil: 'networkidle0' }); await capture();
     const supplied = fs.readFileSync(path.join(__dirname, '../public/examples/pdf-model/flange-model-example.pdf'));
     const chooserPromise = page.waitForFileChooser();
     await click('PDF 선택');

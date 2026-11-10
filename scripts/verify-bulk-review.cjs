@@ -108,7 +108,7 @@ async function checkBrowser() {
     const open = async () => { await click('일괄 입력·확정'); await page.waitForSelector('dialog[open] [aria-label="일괄 부품표 입력"]'); };
     const primary = async () => { const handle = await page.$('dialog[open] > div:last-child button'); await handle.click(); await handle.dispose(); };
     const set = (label, value) => page.$eval('[aria-label="' + label + '"]', (node, value) => { const prototype = node.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype, 'value').set.call(node, value); node.dispatchEvent(new Event('input', { bubbles: true })); }, value);
-    await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' }); await (await page.$('input[aria-label="분석할 PDF 선택"]')).uploadFile(pdfPath); await ready(); await click('부품 검토·보정');
+    await page.goto('http://localhost:3000/training/upload-dev', { waitUntil: 'networkidle0' }); await (await page.$('input[aria-label="분석할 PDF 선택"]')).uploadFile(pdfPath); await ready(); await click('부품 검토·보정');
     assert.equal(await page.$eval('[aria-label="검토 품명"]', (node) => node.value), '미지정 부품 001234'); await page.waitForSelector('[data-temporary-name]');
     await set('검토 수량', '2'); await set('검토 재질', 'AL6061'); await click('치수 0'); await page.click('[aria-label="원문에 치수 없음 확인"]');
     await click('이 부품 검토 확정'); await page.waitForSelector('[data-review-status=confirmed]'); await click('검토 결과 저장');

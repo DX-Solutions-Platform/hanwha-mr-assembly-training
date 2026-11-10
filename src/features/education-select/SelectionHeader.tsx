@@ -14,7 +14,7 @@ export function SelectionHeader({ isVisible, isProcess = false }: { isVisible: b
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f37321" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 16V4" /><path d="m6 10 6-6 6 6" /><path d="M4 20h16" />
       </svg>
-      <span>조립품 가져오기</span>
+      <span>도면 업데이트</span>
     </Upload>}
   </>;
 }

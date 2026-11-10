@@ -1,0 +1,14 @@
+[
+  {
+    "reference": "demo7d/Flow Main.dc.html",
+    "sha256": "15dc0cb05be3be62c07f7209e51d8b32dccaae0217784e361b0398e1a2aa3943",
+    "component": "DrawingFlowMain",
+    "bytes": 308315
+  },
+  {
+    "reference": "demo7d/Flow Steps.dc.html",
+    "sha256": "e96a3675b784107ca3b64946cbed9a79e2cad961a770ae77006ca1606d1888cb",
+    "component": "DrawingFlowSteps",
+    "bytes": 175385
+  }
+]

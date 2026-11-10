@@ -56,7 +56,7 @@ async function checkBrowser() {
       throw new Error('OCR workers remained alive after completion/cancellation');
     };
     const capture = () => page.evaluate(() => { const original = URL.createObjectURL; URL.createObjectURL = function(blob) { if (blob.type === 'application/json') window.__ocrJson = blob; return original.call(this, blob); }; });
-    const reset = async () => { await page.goto('http://localhost:3000/training/upload', { waitUntil: 'networkidle0' }); await capture(); };
+    const reset = async () => { await page.goto('http://localhost:3000/training/upload-dev', { waitUntil: 'networkidle0' }); await capture(); };
     const upload = async (filename) => (await page.$('input[aria-label="분석할 PDF 선택"]')).uploadFile(filename);
     const ready = () => page.waitForSelector('[data-analysis-status=complete]', { timeout: 90000 });
     const reviewReady = () => page.waitForFunction(() => [...document.querySelectorAll('button')].some((node) => node.textContent === '부품 검토·보정' && !node.disabled));
