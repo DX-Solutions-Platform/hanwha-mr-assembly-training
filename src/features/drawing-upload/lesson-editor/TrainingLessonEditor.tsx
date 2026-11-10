@@ -598,7 +598,7 @@ function LessonWorkspace({ sourceZip, archive, lesson: initialLesson, busy, mode
     {drawingPreviewOpen && drawingFile && <LessonDrawingPreview file={drawingFile}
       onClose={() => setDrawingPreviewOpen(false)}
       onDownload={() => saveFile(drawingFile.blob, drawingFile.name)} />}
-    {exportOpen && <QuestExportDialog onClose={() => setExportOpen(false)}
+    {exportOpen && <QuestExportDialog demo={demo} onClose={() => setExportOpen(false)}
       onDownload={() => { setExportOpen(false); void download(); }}
       onPublish={async (deliver) => {
         const result = await buildPackage();
